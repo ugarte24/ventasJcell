@@ -318,11 +318,16 @@ ventacontrol-pro/
 - ✅ **Mejoras en v2.15.0:**
   - **Rebranding completo**: Cambio de nombre de "VentaPlus" a "J-Cell" en toda la aplicación
   - **Nuevo logo**: Icono simplificado mostrando solo la letra "J" con contorno azul (#2563EB) sobre fondo negro
-  - **Prevención de traducción automática**: Configuración para evitar que el navegador traduzca automáticamente el nombre de la marca
-  - **Corrección de error DOM**: Solucionado error "insertBefore" que ocurría durante la navegación después del login cuando el navegador traducía la página
+  - **Prevención de traducción automática**: Implementación completa de medidas para evitar que el navegador traduzca automáticamente la página:
+    - Meta tags `notranslate` y `google-translate-customization` en HTML
+    - Atributos `translate="no"` y `class="notranslate"` en elementos críticos (html, body, root)
+    - Scripts inline para prevenir traducción al cargar la página
+    - Estilos CSS con `!important` para proteger el DOM
+    - Configuración en `main.tsx` para asegurar atributos en el root de React
+  - **Corrección de error DOM**: Solucionado error "insertBefore" que ocurría durante la navegación después del login cuando el navegador traducía automáticamente la página
   - **Mejoras en navegación**: Implementado `useTransition` y delay para navegación más estable después del login
   - **Optimización de Toasters**: Agregados keys únicos para evitar conflictos de renderizado
-  - **Configuración de idioma**: HTML configurado con `lang="es"` y meta tag para prevenir traducción automática
+  - **Configuración de idioma**: HTML configurado con `lang="es"` y múltiples medidas para prevenir traducción automática
 
 - ✅ **Mejoras en v2.14.0:**
   - Corrección del selector de clientes en móvil/tablet: Se aumentó el z-index del Popover para que aparezca correctamente sobre el Sheet del carrito cuando se selecciona el método de pago "Crédito"

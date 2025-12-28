@@ -1,8 +1,10 @@
 <!doctype html>
-<html lang="es">
+<html lang="es" translate="no" class="notranslate">
   <head>
     <meta charset="UTF-8" />
     <meta name="google" content="notranslate" />
+    <meta name="google-translate-customization" content="false" />
+    <meta http-equiv="Content-Language" content="es" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="alternate icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/favicon.svg" />
@@ -23,8 +25,27 @@
     <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
   </head>
 
-  <body>
-    <div id="root"></div>
+  <body translate="no" class="notranslate">
+    <div id="root" translate="no" class="notranslate"></div>
+    <script>
+      // Prevenir traducción automática del navegador
+      if (document.documentElement) {
+        document.documentElement.setAttribute('translate', 'no');
+        document.documentElement.classList.add('notranslate');
+      }
+      if (document.body) {
+        document.body.setAttribute('translate', 'no');
+        document.body.classList.add('notranslate');
+      }
+      // Detectar y prevenir extensiones de traducción
+      document.addEventListener('DOMContentLoaded', function() {
+        const root = document.getElementById('root');
+        if (root) {
+          root.setAttribute('translate', 'no');
+          root.classList.add('notranslate');
+        }
+      });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

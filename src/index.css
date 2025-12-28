@@ -268,11 +268,24 @@
 
 /* Prevenir traducción automática del navegador */
 [translate="no"],
-.notranslate {
-  translate: no;
+.notranslate,
+html[translate="no"],
+body[translate="no"],
+#root[translate="no"] {
+  translate: no !important;
 }
 
-/* Asegurar que React controle el DOM */
+/* Prevenir que el navegador modifique el DOM */
+html,
+body,
 #root {
   isolation: isolate;
+}
+
+/* Prevenir interferencia de extensiones de traducción */
+* {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
 }
