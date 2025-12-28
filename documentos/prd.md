@@ -518,6 +518,15 @@ Los reportes se generan dinámicamente a partir de:
 - ✅ Preservación de estado del sidebar: La posición de scroll y el estado de secciones abiertas/cerradas se mantienen al navegar entre páginas
 - ✅ Corrección de mensajes duplicados: Eliminación de mensajes de éxito duplicados en la edición de movimientos
 
+**Cambios en v2.15.0:**
+- **Rebranding completo**: Cambio de nombre de "VentaPlus" a "J-Cell" en toda la aplicación (interfaz, documentación, tickets, reportes)
+- **Nuevo logo**: Icono simplificado mostrando solo la letra "J" con contorno azul (#2563EB) sobre fondo negro, reemplazando el logo "V+" anterior
+- **Prevención de traducción automática**: Configuración de `lang="es"` en HTML y meta tag `notranslate` para evitar que el navegador traduzca automáticamente el nombre de la marca
+- **Corrección de error DOM**: Solucionado error "Failed to execute 'insertBefore' on 'Node'" que ocurría durante la navegación después del login cuando el navegador traducía automáticamente la página
+- **Mejoras en navegación**: Implementado `useTransition` de React y delay de 200ms para navegación más estable después del login, evitando conflictos de renderizado
+- **Optimización de Toasters**: Agregados keys únicos (`shadcn-toaster` y `sonner-toaster`) para evitar conflictos de renderizado entre múltiples sistemas de notificaciones
+- **Configuración de idioma**: HTML configurado correctamente con `lang="es"` y atributos `translate="no"` en elementos de marca para prevenir traducción automática
+
 **Cambios en v2.14.0:**
 - Corrección del selector de clientes en móvil/tablet: Se aumentó el z-index del Popover para que aparezca correctamente sobre el Sheet del carrito cuando se selecciona el método de pago "Crédito"
 - Limpieza automática del carrito en ventas a crédito: Al completar una venta a crédito, el sistema ahora limpia automáticamente el carrito y resetea todos los campos relacionados con crédito (cliente, cuotas, interés, cuota inicial) para preparar el formulario para la próxima venta
@@ -606,9 +615,9 @@ Los reportes se generan dinámicamente a partir de:
 
 ---
 
-**Versión del PRD:** 2.14  
+**Versión del PRD:** 2.15  
 **Última actualización:** Diciembre 2025  
-**Estado del Proyecto:** v2.14.0 - Sistema Completo con Correcciones en Carrito Móvil y Ventas a Crédito
+**Estado del Proyecto:** v2.15.0 - Sistema Completo con Rebranding a J-Cell y Correcciones de DOM
 
 ### 📝 Notas Técnicas Importantes
 

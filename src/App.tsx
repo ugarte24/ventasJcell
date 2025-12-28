@@ -29,8 +29,8 @@ const App = () => (
     <TooltipProvider>
       <AuthProvider>
         <CartProvider>
-          <Toaster />
-          <Sonner />
+          <Toaster key="shadcn-toaster" />
+          <Sonner key="sonner-toaster" />
           <BrowserRouter
             future={{
               v7_startTransition: true,

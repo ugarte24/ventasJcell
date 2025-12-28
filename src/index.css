@@ -265,3 +265,14 @@
     }
   }
 }
+
+/* Prevenir traducción automática del navegador */
+[translate="no"],
+.notranslate {
+  translate: no;
+}
+
+/* Asegurar que React controle el DOM */
+#root {
+  isolation: isolate;
+}

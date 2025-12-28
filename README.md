@@ -315,6 +315,15 @@ ventacontrol-pro/
   - ✅ Preservación de posición de scroll y estado de secciones en el sidebar
   - ✅ Corrección de mensajes duplicados en la edición de movimientos
 
+- ✅ **Mejoras en v2.15.0:**
+  - **Rebranding completo**: Cambio de nombre de "VentaPlus" a "J-Cell" en toda la aplicación
+  - **Nuevo logo**: Icono simplificado mostrando solo la letra "J" con contorno azul (#2563EB) sobre fondo negro
+  - **Prevención de traducción automática**: Configuración para evitar que el navegador traduzca automáticamente el nombre de la marca
+  - **Corrección de error DOM**: Solucionado error "insertBefore" que ocurría durante la navegación después del login cuando el navegador traducía la página
+  - **Mejoras en navegación**: Implementado `useTransition` y delay para navegación más estable después del login
+  - **Optimización de Toasters**: Agregados keys únicos para evitar conflictos de renderizado
+  - **Configuración de idioma**: HTML configurado con `lang="es"` y meta tag para prevenir traducción automática
+
 - ✅ **Mejoras en v2.14.0:**
   - Corrección del selector de clientes en móvil/tablet: Se aumentó el z-index del Popover para que aparezca correctamente sobre el Sheet del carrito cuando se selecciona el método de pago "Crédito"
   - Limpieza automática del carrito en ventas a crédito: Al completar una venta a crédito, el sistema ahora limpia automáticamente el carrito y resetea todos los campos relacionados con crédito (cliente, cuotas, interés, cuota inicial) para preparar el formulario para la próxima venta
@@ -419,6 +428,6 @@ El sistema implementa un manejo robusto de fechas para evitar problemas de zona 
 
 ---
 
-**Versión**: 2.10.0  
+**Versión**: 2.15.0  
 **Última actualización**: Diciembre 2025  
-**Estado**: Sistema completo con Mejoras en Gestión de Servicios y UX - En producción
+**Estado**: Sistema completo con Rebranding a J-Cell y Correcciones de DOM - En producción

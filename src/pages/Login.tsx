@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -30,14 +31,19 @@ export default function Login() {
       
       if (success) {
         toast.success('¡Bienvenido a J-Cell!');
-        navigate('/dashboard');
+        // Usar startTransition y delay para evitar conflictos de DOM
+        startTransition(() => {
+          setTimeout(() => {
+            navigate('/dashboard', { replace: true });
+          }, 200);
+        });
       } else {
         toast.error('Error al iniciar sesión');
+        setIsLoading(false);
       }
     } catch (error: any) {
       const errorMessage = error?.message || 'Error al iniciar sesión';
       toast.error(errorMessage);
-    } finally {
       setIsLoading(false);
     }
   };
@@ -52,7 +58,7 @@ export default function Login() {
               J
             </span>
           </div>
-          <h1 className="font-display text-3xl font-bold text-foreground">J-Cell</h1>
+          <h1 className="font-display text-3xl font-bold text-foreground" translate="no">J-Cell</h1>
           <p className="mt-2 text-muted-foreground">Sistema de Gestión de Ventas</p>
         </div>
 
