@@ -329,7 +329,7 @@ export default function Reports() {
           ticketPromedio: stats.promedio,
         },
         usuario: user?.nombre || 'N/A',
-        entity: 'VentaPlus - Sistema de Gestión de Ventas',
+        entity: 'J-Cell - Sistema de Gestión de Ventas',
         reportType: 'RECAUDACIÓN GENERAL POR RESUMENES',
       });
       toast.success('Exportación a PDF completada');
@@ -576,7 +576,7 @@ export default function Reports() {
           ticketPromedio: creditStats.cantidadActivos > 0 ? creditStats.totalVentas / creditStats.cantidadActivos : 0,
         },
         usuario: user?.nombre || 'N/A',
-        entity: 'VentaPlus - Sistema de Gestión de Ventas',
+        entity: 'J-Cell - Sistema de Gestión de Ventas',
         reportType: 'REPORTE DE VENTAS A CRÉDITO',
       });
       toast.success('Exportación a PDF completada');

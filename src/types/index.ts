@@ -1,4 +1,4 @@
-// VentaPlus Type Definitions
+// J-Cell Type Definitions
 
 export type UserRole = 'admin' | 'vendedor';
 

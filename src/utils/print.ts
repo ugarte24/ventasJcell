@@ -159,7 +159,7 @@ export function printTicket(data: PrintTicketData) {
     </head>
     <body>
       <div class="header">
-        <h1>VENTAPLUS</h1>
+        <h1>J-CELL</h1>
         <p>Sistema de Punto de Venta</p>
       </div>
       
@@ -303,7 +303,7 @@ export function printTicket(data: PrintTicketData) {
       
       <div class="footer">
         <p>¡Gracias por su compra!</p>
-        <p>VentaPlus - Sistema de Ventas</p>
+        <p>J-Cell - Sistema de Ventas</p>
       </div>
     </body>
     </html>

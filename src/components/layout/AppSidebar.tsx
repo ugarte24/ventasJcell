@@ -211,12 +211,14 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border p-4 space-y-3">
         <div className={cn("flex items-center gap-3", collapsed && "justify-center")}>
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground font-display font-bold text-lg">
-            V+
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-black text-white font-display font-bold text-xl shadow-lg">
+            <span className="text-white" style={{ textShadow: "0 0 2px #2563EB, 0 0 4px #2563EB" }}>
+              J
+            </span>
           </div>
           {!collapsed && (
             <div className="flex flex-col">
-              <span className="font-display font-semibold text-foreground">VentaPlus</span>
+              <span className="font-display font-semibold text-foreground">J-Cell</span>
               <span className="text-xs text-muted-foreground">Sistema de Ventas</span>
             </div>
           )}

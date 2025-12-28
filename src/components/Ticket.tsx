@@ -32,7 +32,7 @@ export function Ticket({ sale, items, vendedor, cliente }: TicketProps) {
     }}>
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '10px', borderBottom: '1px dashed #000', paddingBottom: '10px' }}>
-        <h1 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 5px 0' }}>VENTAPLUS</h1>
+        <h1 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 5px 0' }}>J-CELL</h1>
         <p style={{ fontSize: '10px', margin: '0' }}>Sistema de Punto de Venta</p>
       </div>
 
@@ -114,7 +114,7 @@ export function Ticket({ sale, items, vendedor, cliente }: TicketProps) {
       {/* Footer */}
       <div style={{ marginTop: '15px', textAlign: 'center', borderTop: '1px dashed #000', paddingTop: '10px', fontSize: '10px' }}>
         <p style={{ margin: '5px 0' }}>¡Gracias por su compra!</p>
-        <p style={{ margin: '5px 0' }}>VentaPlus - Sistema de Ventas</p>
+        <p style={{ margin: '5px 0' }}>J-Cell - Sistema de Ventas</p>
       </div>
     </div>
   );

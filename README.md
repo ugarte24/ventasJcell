@@ -1,4 +1,4 @@
-# VentaPlus - Sistema de Punto de Venta
+# J-Cell - Sistema de Punto de Venta
 
 Sistema de gestión de ventas e inventario diseñado para reemplazar el registro manual en cuadernos, proporcionando control digital de inventarios, clientes y ventas con reportes en tiempo real.
 

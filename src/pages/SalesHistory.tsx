@@ -374,7 +374,7 @@ export default function SalesHistory() {
           hasta: fechaHasta || undefined,
         },
         usuario: user?.nombre || 'N/A',
-        entity: 'VentaPlus - Sistema de Gestión de Ventas',
+        entity: 'J-Cell - Sistema de Gestión de Ventas',
         reportType: 'HISTORIAL DE TRANSACCIONES',
       });
       toast.success('Exportación a PDF completada');

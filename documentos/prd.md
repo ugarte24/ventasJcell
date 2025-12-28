@@ -1,4 +1,4 @@
-# 📄 PRD: VentaPlus - Sistema de Punto de Venta
+# 📄 PRD: J-Cell - Sistema de Punto de Venta
 
 ## 1. Problema
 
@@ -453,7 +453,7 @@ Los reportes se generan dinámicamente a partir de:
   - ✅ Mejoras de compatibilidad con Android (área táctil aumentada, eventos touch)
   - ✅ Corrección de apertura del menú lateral en móvil
   - ✅ Viewport optimizado para diferentes tamaños de pantalla
-  - ✅ Favicon personalizado con logo V+ del sistema
+  - ✅ Favicon personalizado con logo J del sistema
   - ✅ Apple Touch Icon y Web Manifest para PWA
   - ✅ Theme color para personalización en móviles
 - ✅ **Mejoras de interfaz:**
@@ -551,7 +551,7 @@ Los reportes se generan dinámicamente a partir de:
 
 ## 8. Branding y Diseño
 
-**Nombre:** VentaPlus
+**Nombre:** J-Cell
 
 **Tono:** Profesional, confiable, eficiente
 
