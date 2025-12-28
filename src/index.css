@@ -1,0 +1,267 @@
+@import "@fontsource/outfit/400.css";
+@import "@fontsource/outfit/500.css";
+@import "@fontsource/outfit/600.css";
+@import "@fontsource/outfit/700.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* VentaPlus Design System - Professional POS Dashboard */
+
+@layer base {
+  :root {
+    --background: 220 20% 97%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 224 71% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 162 63% 41%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 224 71% 45%;
+
+    --radius: 0.75rem;
+
+    /* Custom tokens */
+    --success: 162 63% 41%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+
+    /* Sidebar */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 220 9% 46%;
+    --sidebar-primary: 224 71% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 224 71% 97%;
+    --sidebar-accent-foreground: 224 71% 45%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 224 71% 45%;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(224 71% 45%), hsl(224 71% 55%));
+    --gradient-accent: linear-gradient(135deg, hsl(162 63% 41%), hsl(162 63% 51%));
+    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%), hsl(220 20% 99%));
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(220 13% 91% / 0.5);
+    --shadow-md: 0 4px 6px -1px hsl(220 13% 91% / 0.5), 0 2px 4px -2px hsl(220 13% 91% / 0.5);
+    --shadow-lg: 0 10px 15px -3px hsl(220 13% 91% / 0.5), 0 4px 6px -4px hsl(220 13% 91% / 0.5);
+    --shadow-card: 0 1px 3px 0 hsl(220 13% 91% / 0.3), 0 1px 2px -1px hsl(220 13% 91% / 0.3);
+  }
+
+  .dark {
+    --background: 222 47% 8%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 47% 11%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 224 71% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 162 63% 41%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 224 71% 55%;
+
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 215 20% 65%;
+    --sidebar-primary: 224 71% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 217 33% 17%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217 33% 17%;
+    --sidebar-ring: 224 71% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Outfit', sans-serif;
+  }
+
+  /* Ocultar spinner en campos de tipo number */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  /* Ocultar spinner en Firefox */
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+}
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideUp {
+    from { 
+      opacity: 0; 
+      transform: translateY(10px); 
+    }
+    to { 
+      opacity: 1; 
+      transform: translateY(0); 
+    }
+  }
+
+  @keyframes scaleIn {
+    from { 
+      opacity: 0; 
+      transform: scale(0.95); 
+    }
+    to { 
+      opacity: 1; 
+      transform: scale(1); 
+    }
+  }
+}
+
+/* Estilos específicos para Android - Mejorar compatibilidad con touch */
+@layer base {
+  /* Asegurar que el botón del menú sea táctil en Android */
+  button[data-sidebar="trigger"] {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+  }
+
+  /* Área táctil mínima de 44x44px para Android */
+  @media (max-width: 768px) {
+    button[data-sidebar="trigger"] {
+      min-width: 44px !important;
+      min-height: 44px !important;
+      padding: 0 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
+  }
+
+  /* Asegurar que el header no bloquee toques */
+  header {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: pan-y;
+  }
+
+  /* Mejorar respuesta táctil en Android */
+  @supports (-webkit-touch-callout: none) {
+    button[data-sidebar="trigger"] {
+      -webkit-appearance: none;
+      -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+    }
+  }
+
+  /* Asegurar que el contenido sea visible en pantallas pequeñas */
+  body {
+    overflow-x: hidden;
+  }
+
+  #root {
+    width: 100%;
+  }
+
+  /* Fix para viewport en móviles - solo aplicar en pantallas pequeñas */
+  @media (max-width: 640px) {
+    html {
+      height: 100%;
+      height: -webkit-fill-available;
+    }
+
+    body {
+      min-height: 100%;
+      min-height: -webkit-fill-available;
+    }
+
+    #root {
+      min-height: 100%;
+      min-height: -webkit-fill-available;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Override para móviles pequeños - asegurar que el contenido sea visible */
+    .group\/sidebar-wrapper {
+      min-height: 100% !important;
+      min-height: -webkit-fill-available !important;
+    }
+
+    main[data-sidebar="inset"] {
+      min-height: 100% !important;
+      min-height: -webkit-fill-available !important;
+    }
+  }
+
+  /* Asegurar altura correcta en desktop */
+  @media (min-width: 641px) {
+    .group\/sidebar-wrapper {
+      min-height: 100vh;
+    }
+  }
+}

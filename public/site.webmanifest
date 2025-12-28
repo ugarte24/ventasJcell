@@ -1,0 +1,22 @@
+{
+  "name": "VentaPlus - Sistema de Gestión de Ventas",
+  "short_name": "VentaPlus",
+  "description": "Sistema POS profesional para gestión de ventas, inventario y arqueo de caja",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563EB"
+}
+
