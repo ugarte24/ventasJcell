@@ -442,6 +442,6 @@ El sistema implementa un manejo robusto de fechas para evitar problemas de zona 
 
 ---
 
-**Versión**: 2.15.0  
+**Versión**: 2.16.0  
 **Última actualización**: Diciembre 2025  
-**Estado**: Sistema completo con Rebranding a J-Cell y Correcciones de DOM - En producción
+**Estado**: Sistema completo con Captura de Cámara y Compresión Automática de Imágenes - En producción

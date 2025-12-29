@@ -631,9 +631,9 @@ Los reportes se generan dinámicamente a partir de:
 
 ---
 
-**Versión del PRD:** 2.15  
+**Versión del PRD:** 2.16  
 **Última actualización:** Diciembre 2025  
-**Estado del Proyecto:** v2.15.0 - Sistema Completo con Rebranding a J-Cell y Correcciones de DOM
+**Estado del Proyecto:** v2.16.0 - Sistema Completo con Captura de Cámara y Compresión Automática de Imágenes
 
 ### 📝 Notas Técnicas Importantes
 
