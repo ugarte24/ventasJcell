@@ -328,6 +328,15 @@ ventacontrol-pro/
   - **Mejoras en navegación**: Implementado `useTransition` y delay para navegación más estable después del login
   - **Optimización de Toasters**: Agregados keys únicos para evitar conflictos de renderizado
   - **Configuración de idioma**: HTML configurado con `lang="es"` y múltiples medidas para prevenir traducción automática
+  - **Captura de imágenes desde cámara**: Los formularios de crear y editar productos ahora permiten capturar imágenes directamente desde la cámara del dispositivo
+  - **Compresión automática de imágenes**: Sistema inteligente de compresión que reduce automáticamente el tamaño de imágenes mayores a 5MB:
+    - Redimensiona imágenes a máximo 1600x1600px manteniendo proporción
+    - Calidad JPEG inicial: 80% (balance óptimo)
+    - Calidad mínima: 60% (mínimo recomendado para mantener calidad visual)
+    - Reducción gradual de calidad y dimensiones si es necesario
+    - Proceso automático y transparente para el usuario
+  - **Corrección de políticas RLS para Storage**: Políticas de Row-Level Security corregidas para permitir subida de imágenes a usuarios autenticados
+  - **Corrección de función RPC**: Función `get_user_email_by_username` corregida para permitir login por nombre de usuario
 
 - ✅ **Mejoras en v2.14.0:**
   - Corrección del selector de clientes en móvil/tablet: Se aumentó el z-index del Popover para que aparezca correctamente sobre el Sheet del carrito cuando se selecciona el método de pago "Crédito"

@@ -532,6 +532,16 @@ Los reportes se generan dinámicamente a partir de:
 - **Mejoras en navegación**: Implementado `useTransition` de React y delay de 200ms para navegación más estable después del login, evitando conflictos de renderizado
 - **Optimización de Toasters**: Agregados keys únicos (`shadcn-toaster` y `sonner-toaster`) para evitar conflictos de renderizado entre múltiples sistemas de notificaciones
 - **Configuración de idioma**: HTML configurado correctamente con `lang="es"` y múltiples capas de protección contra traducción automática
+- **Captura de imágenes desde cámara**: Los formularios de crear y editar productos ahora permiten capturar imágenes directamente desde la cámara del dispositivo, mejorando la experiencia de usuario al no requerir transferir imágenes desde otro dispositivo
+- **Compresión automática de imágenes**: Sistema inteligente de compresión que reduce automáticamente el tamaño de imágenes mayores a 5MB:
+  - Redimensiona imágenes a máximo 1600x1600px manteniendo proporción (recomendado para productos)
+  - Calidad JPEG inicial: 80% (balance óptimo calidad/tamaño)
+  - Calidad mínima: 60% (mínimo recomendado para mantener calidad visual)
+  - Reducción gradual de calidad (pasos de 5%) y dimensiones (90% del tamaño) si es necesario
+  - Proceso automático y transparente para el usuario con feedback visual del porcentaje de reducción
+  - Funciona tanto para imágenes seleccionadas desde archivo como para fotos capturadas desde cámara
+- **Corrección de políticas RLS para Storage**: Políticas de Row-Level Security corregidas para permitir subida de imágenes a usuarios autenticados usando `auth.role() = 'authenticated'`
+- **Corrección de función RPC**: Función `get_user_email_by_username` corregida y replicada exactamente del sistema que funciona, permitiendo login por nombre de usuario además de correo electrónico
 
 **Cambios en v2.14.0:**
 - Corrección del selector de clientes en móvil/tablet: Se aumentó el z-index del Popover para que aparezca correctamente sobre el Sheet del carrito cuando se selecciona el método de pago "Crédito"

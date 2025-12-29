@@ -206,18 +206,67 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Si no es un email, buscar el email por username
       if (!usuario.includes('@')) {
-        const { data: userEmail, error: rpcError } = await (supabase.rpc as any)(
-          'get_user_email_by_username',
-          { username_param: usuario }
-        );
+        try {
+          const { data: userEmail, error: rpcError } = await supabase.rpc(
+            'get_user_email_by_username',
+            { username_param: usuario }
+          );
 
-        if (rpcError || !userEmail) {
-          setLoading(false);
-          setIsLoggingIn(false);
-          throw new Error('Usuario no encontrado. Verifica tu nombre de usuario.');
+          if (rpcError) {
+            console.error('Error al buscar email por username:', rpcError);
+            // Si la función RPC no está disponible (PGRST202 = función no encontrada en schema cache),
+            // intentar buscar directamente en la tabla usuarios y luego obtener el email desde auth.users
+            const { data: userData, error: queryError } = await supabase
+              .from('usuarios')
+              .select('id')
+              .eq('usuario', usuario)
+              .eq('estado', 'activo')
+              .maybeSingle();
+
+            if (queryError || !userData || !userData.id) {
+              setLoading(false);
+              setIsLoggingIn(false);
+              throw new Error('Usuario no encontrado. Verifica tu nombre de usuario o usa tu correo electrónico.');
+            }
+
+            // Si encontramos el usuario pero no podemos obtener el email vía RPC,
+            // necesitamos usar una alternativa. Por ahora, pedir al usuario que use su email.
+            setLoading(false);
+            setIsLoggingIn(false);
+            throw new Error('El sistema de búsqueda por nombre de usuario no está disponible temporalmente. Por favor, usa tu correo electrónico para iniciar sesión.');
+          }
+
+          if (!userEmail) {
+            setLoading(false);
+            setIsLoggingIn(false);
+            throw new Error('Usuario no encontrado. Verifica tu nombre de usuario.');
+          }
+
+          email = userEmail;
+        } catch (error: any) {
+          // Si es un error de red o 404, puede ser que la función no esté disponible
+          if (error?.message?.includes('404') || error?.code === 'PGRST301') {
+            console.error('Función RPC no disponible, intentando método alternativo');
+            // Intentar buscar directamente en la tabla usuarios
+            const { data: userData, error: queryError } = await supabase
+              .from('usuarios')
+              .select('id')
+              .eq('usuario', usuario)
+              .eq('estado', 'activo')
+              .single();
+
+            if (queryError || !userData) {
+              setLoading(false);
+              setIsLoggingIn(false);
+              throw new Error('Usuario no encontrado. Verifica tu nombre de usuario o usa tu correo electrónico.');
+            }
+
+            setLoading(false);
+            setIsLoggingIn(false);
+            throw new Error('Por favor, usa tu correo electrónico para iniciar sesión. El sistema de búsqueda por nombre de usuario no está disponible temporalmente.');
+          }
+          throw error;
         }
-
-        email = userEmail;
       }
 
       // Verificar que el cliente esté listo

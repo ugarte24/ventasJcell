@@ -81,7 +81,8 @@ import {
   Upload,
   Image as ImageIcon,
   Check,
-  ChevronsUpDown
+  ChevronsUpDown,
+  Camera
 } from 'lucide-react';
 import { 
   useProducts, 
@@ -100,7 +101,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { storageService } from '@/services/storage.service';
-import { cn } from '@/lib/utils';
+import { cn, compressImage } from '@/lib/utils';
 
 // Esquemas de validación
 const createProductSchema = z.object({
@@ -174,11 +175,17 @@ export default function Products() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [videoRef, setVideoRef] = useState<HTMLVideoElement | null>(null);
   
   // Estados para imagen en edición
   const [editSelectedImage, setEditSelectedImage] = useState<File | null>(null);
   const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
   const [isUploadingEditImage, setIsUploadingEditImage] = useState(false);
+  const [isEditCameraOpen, setIsEditCameraOpen] = useState(false);
+  const [editCameraStream, setEditCameraStream] = useState<MediaStream | null>(null);
+  const [editVideoRef, setEditVideoRef] = useState<HTMLVideoElement | null>(null);
 
   const createForm = useForm<CreateProductForm>({
     resolver: zodResolver(createProductSchema),
@@ -273,7 +280,7 @@ export default function Products() {
     }
   };
 
-  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       // Validar tipo de archivo
@@ -282,20 +289,26 @@ export default function Products() {
         return;
       }
       
-      // Validar tamaño (máximo 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('La imagen debe ser menor a 5MB');
-        return;
-      }
+      try {
+        // Comprimir imagen si es mayor a 5MB
+        const processedFile = await compressImage(file, 5);
+        
+        if (processedFile.size < file.size) {
+          const reductionPercent = ((file.size - processedFile.size) / file.size * 100).toFixed(1);
+          toast.success(`Imagen comprimida: ${reductionPercent}% de reducción`);
+        }
 
-      setSelectedImage(file);
-      
-      // Crear vista previa
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+        setSelectedImage(processedFile);
+        
+        // Crear vista previa
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setImagePreview(reader.result as string);
+        };
+        reader.readAsDataURL(processedFile);
+      } catch (error: any) {
+        toast.error(error.message || 'Error al procesar la imagen');
+      }
     }
   };
 
@@ -303,6 +316,161 @@ export default function Products() {
     setSelectedImage(null);
     setImagePreview(null);
   };
+
+  // Funciones para captura desde cámara (crear producto)
+  const openCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' } // Cámara trasera en móviles
+      });
+      setCameraStream(stream);
+      setIsCameraOpen(true);
+    } catch (error: any) {
+      console.error('Error al acceder a la cámara:', error);
+      toast.error('No se pudo acceder a la cámara. Verifica los permisos.');
+    }
+  };
+
+  const closeCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+    setIsCameraOpen(false);
+  };
+
+  const capturePhoto = async () => {
+    if (!videoRef) return;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = videoRef.videoWidth;
+    canvas.height = videoRef.videoHeight;
+    const ctx = canvas.getContext('2d');
+    
+    if (ctx) {
+      ctx.drawImage(videoRef, 0, 0);
+      canvas.toBlob(async (blob) => {
+        if (blob) {
+          try {
+            // Convertir blob a File
+            const originalFile = new File([blob], `foto-${Date.now()}.jpg`, { type: 'image/jpeg' });
+            
+            // Comprimir si es necesario
+            const processedFile = await compressImage(originalFile, 5);
+            
+            if (processedFile.size < originalFile.size) {
+              const reductionPercent = ((originalFile.size - processedFile.size) / originalFile.size * 100).toFixed(1);
+              toast.success(`Foto capturada y comprimida: ${reductionPercent}% de reducción`);
+            } else {
+              toast.success('Foto capturada exitosamente');
+            }
+
+            setSelectedImage(processedFile);
+            
+            // Crear vista previa
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              setImagePreview(reader.result as string);
+            };
+            reader.readAsDataURL(processedFile);
+            
+            closeCamera();
+          } catch (error: any) {
+            toast.error(error.message || 'Error al procesar la foto');
+          }
+        }
+      }, 'image/jpeg', 0.9);
+    }
+  };
+
+  // Funciones para captura desde cámara (editar producto)
+  const openEditCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' }
+      });
+      setEditCameraStream(stream);
+      setIsEditCameraOpen(true);
+    } catch (error: any) {
+      console.error('Error al acceder a la cámara:', error);
+      toast.error('No se pudo acceder a la cámara. Verifica los permisos.');
+    }
+  };
+
+  const closeEditCamera = () => {
+    if (editCameraStream) {
+      editCameraStream.getTracks().forEach(track => track.stop());
+      setEditCameraStream(null);
+    }
+    setIsEditCameraOpen(false);
+  };
+
+  const captureEditPhoto = async () => {
+    if (!editVideoRef) return;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = editVideoRef.videoWidth;
+    canvas.height = editVideoRef.videoHeight;
+    const ctx = canvas.getContext('2d');
+    
+    if (ctx) {
+      ctx.drawImage(editVideoRef, 0, 0);
+      canvas.toBlob(async (blob) => {
+        if (blob) {
+          try {
+            // Convertir blob a File
+            const originalFile = new File([blob], `foto-${Date.now()}.jpg`, { type: 'image/jpeg' });
+            
+            // Comprimir si es necesario
+            const processedFile = await compressImage(originalFile, 5);
+            
+            if (processedFile.size < originalFile.size) {
+              const reductionPercent = ((originalFile.size - processedFile.size) / originalFile.size * 100).toFixed(1);
+              toast.success(`Foto capturada y comprimida: ${reductionPercent}% de reducción`);
+            } else {
+              toast.success('Foto capturada exitosamente');
+            }
+
+            setEditSelectedImage(processedFile);
+            
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              setEditImagePreview(reader.result as string);
+            };
+            reader.readAsDataURL(processedFile);
+            
+            closeEditCamera();
+          } catch (error: any) {
+            toast.error(error.message || 'Error al procesar la foto');
+          }
+        }
+      }, 'image/jpeg', 0.9);
+    }
+  };
+
+  // Limpiar streams al desmontar o cerrar diálogos
+  useEffect(() => {
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+      }
+      if (editCameraStream) {
+        editCameraStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [cameraStream, editCameraStream]);
+
+  useEffect(() => {
+    if (!isCameraOpen && cameraStream) {
+      closeCamera();
+    }
+  }, [isCameraOpen]);
+
+  useEffect(() => {
+    if (!isEditCameraOpen && editCameraStream) {
+      closeEditCamera();
+    }
+  }, [isEditCameraOpen]);
 
   const handleUpdateProduct = async (data: UpdateProductForm) => {
     if (!selectedProduct) return;
@@ -357,7 +525,7 @@ export default function Products() {
     }
   };
 
-  const handleEditImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleEditImageSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       // Validar tipo de archivo
@@ -366,20 +534,26 @@ export default function Products() {
         return;
       }
       
-      // Validar tamaño (máximo 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('La imagen debe ser menor a 5MB');
-        return;
-      }
+      try {
+        // Comprimir imagen si es mayor a 5MB
+        const processedFile = await compressImage(file, 5);
+        
+        if (processedFile.size < file.size) {
+          const reductionPercent = ((file.size - processedFile.size) / file.size * 100).toFixed(1);
+          toast.success(`Imagen comprimida: ${reductionPercent}% de reducción`);
+        }
 
-      setEditSelectedImage(file);
-      
-      // Crear vista previa
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setEditImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+        setEditSelectedImage(processedFile);
+        
+        // Crear vista previa
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setEditImagePreview(reader.result as string);
+        };
+        reader.readAsDataURL(processedFile);
+      } catch (error: any) {
+        toast.error(error.message || 'Error al procesar la imagen');
+      }
     }
   };
 
@@ -970,27 +1144,38 @@ export default function Products() {
                     ) : (
                       <div className="border-2 border-dashed rounded-lg p-6 text-center">
                         <ImageIcon className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
-                        <Label 
-                          htmlFor="imagen" 
-                          className="cursor-pointer flex flex-col items-center gap-2"
-                        >
-                          <span className="text-sm text-muted-foreground">
-                            Haz clic para seleccionar una imagen
-                          </span>
-                          <Button type="button" variant="outline" size="sm" asChild>
-                            <span>
-                              <Upload className="h-4 w-4 mr-2" />
-                              Seleccionar Imagen
-                            </span>
+                        <span className="text-sm text-muted-foreground block mb-3">
+                          Selecciona una imagen o captura una foto
+                        </span>
+                        <div className="flex gap-2 justify-center">
+                          <Label 
+                            htmlFor="imagen" 
+                            className="cursor-pointer"
+                          >
+                            <Button type="button" variant="outline" size="sm" asChild>
+                              <span>
+                                <Upload className="h-4 w-4 mr-2" />
+                                Seleccionar
+                              </span>
+                            </Button>
+                            <input
+                              id="imagen"
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={handleImageSelect}
+                            />
+                          </Label>
+                          <Button 
+                            type="button" 
+                            variant="outline" 
+                            size="sm"
+                            onClick={openCamera}
+                          >
+                            <Camera className="h-4 w-4 mr-2" />
+                            Cámara
                           </Button>
-                        </Label>
-                        <input
-                          id="imagen"
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={handleImageSelect}
-                        />
+                        </div>
                       </div>
                     )}
                     <p className="text-xs text-muted-foreground">
@@ -1240,27 +1425,38 @@ export default function Products() {
                     ) : (
                       <div className="border-2 border-dashed rounded-lg p-6 text-center">
                         <ImageIcon className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
-                        <Label 
-                          htmlFor="edit-imagen" 
-                          className="cursor-pointer flex flex-col items-center gap-2"
-                        >
-                          <span className="text-sm text-muted-foreground">
-                            Haz clic para seleccionar una imagen
-                          </span>
-                          <Button type="button" variant="outline" size="sm" asChild>
-                            <span>
-                              <Upload className="h-4 w-4 mr-2" />
-                              Seleccionar Imagen
-                            </span>
+                        <span className="text-sm text-muted-foreground block mb-3">
+                          Selecciona una imagen o captura una foto
+                        </span>
+                        <div className="flex gap-2 justify-center">
+                          <Label 
+                            htmlFor="edit-imagen" 
+                            className="cursor-pointer"
+                          >
+                            <Button type="button" variant="outline" size="sm" asChild>
+                              <span>
+                                <Upload className="h-4 w-4 mr-2" />
+                                Seleccionar
+                              </span>
+                            </Button>
+                            <input
+                              id="edit-imagen"
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={handleEditImageSelect}
+                            />
+                          </Label>
+                          <Button 
+                            type="button" 
+                            variant="outline" 
+                            size="sm"
+                            onClick={openEditCamera}
+                          >
+                            <Camera className="h-4 w-4 mr-2" />
+                            Cámara
                           </Button>
-                        </Label>
-                        <input
-                          id="edit-imagen"
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={handleEditImageSelect}
-                        />
+                        </div>
                       </div>
                     )}
                     <p className="text-xs text-muted-foreground">
@@ -1382,6 +1578,92 @@ export default function Products() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Diálogo de cámara para crear producto */}
+        <Dialog open={isCameraOpen} onOpenChange={(open) => {
+          if (!open) {
+            closeCamera();
+          }
+        }}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Capturar Foto</DialogTitle>
+              <DialogDescription>
+                Posiciona el producto frente a la cámara y haz clic en "Capturar"
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              {cameraStream && (
+                <div className="relative w-full bg-black rounded-lg overflow-hidden" style={{ aspectRatio: '4/3' }}>
+                  <video
+                    ref={(el) => {
+                      if (el && cameraStream) {
+                        el.srcObject = cameraStream;
+                        el.play();
+                        setVideoRef(el);
+                      }
+                    }}
+                    autoPlay
+                    playsInline
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeCamera}>
+                Cancelar
+              </Button>
+              <Button type="button" onClick={capturePhoto}>
+                <Camera className="h-4 w-4 mr-2" />
+                Capturar Foto
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Diálogo de cámara para editar producto */}
+        <Dialog open={isEditCameraOpen} onOpenChange={(open) => {
+          if (!open) {
+            closeEditCamera();
+          }
+        }}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Capturar Foto</DialogTitle>
+              <DialogDescription>
+                Posiciona el producto frente a la cámara y haz clic en "Capturar"
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              {editCameraStream && (
+                <div className="relative w-full bg-black rounded-lg overflow-hidden" style={{ aspectRatio: '4/3' }}>
+                  <video
+                    ref={(el) => {
+                      if (el && editCameraStream) {
+                        el.srcObject = editCameraStream;
+                        el.play();
+                        setEditVideoRef(el);
+                      }
+                    }}
+                    autoPlay
+                    playsInline
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeEditCamera}>
+                Cancelar
+              </Button>
+              <Button type="button" onClick={captureEditPhoto}>
+                <Camera className="h-4 w-4 mr-2" />
+                Capturar Foto
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
