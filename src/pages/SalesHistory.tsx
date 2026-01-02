@@ -346,7 +346,7 @@ export default function SalesHistory() {
         columns: [
           { header: 'Fecha', dataKey: 'fecha', width: 25 },
           { header: 'Hora', dataKey: 'hora', width: 20 },
-          { header: 'Vendedor', dataKey: 'id_vendedor', width: 40 },
+          { header: 'Vendedor Tienda', dataKey: 'id_vendedor', width: 40 },
           { header: 'Producto', dataKey: 'producto', width: 50 },
           { header: 'Total', dataKey: 'total', width: 30 },
           { header: 'Método de Pago', dataKey: 'metodo_pago', width: 35 },
@@ -396,7 +396,7 @@ export default function SalesHistory() {
         columns: [
           { header: 'Fecha', dataKey: 'fecha', width: 25 },
           { header: 'Hora', dataKey: 'hora', width: 20 },
-          { header: 'Vendedor', dataKey: 'id_vendedor', width: 40 },
+          { header: 'Vendedor Tienda', dataKey: 'id_vendedor', width: 40 },
           { header: 'Producto', dataKey: 'producto', width: 50 },
           { header: 'Total', dataKey: 'total', width: 30 },
           { header: 'Método de Pago', dataKey: 'metodo_pago', width: 35 },
@@ -577,7 +577,7 @@ export default function SalesHistory() {
                 {/* Vendedor (solo admins) */}
                 {user?.rol === 'admin' && (
                   <div className="space-y-2">
-                    <Label htmlFor="vendedor">Vendedor</Label>
+                    <Label htmlFor="vendedor">Vendedor Tienda</Label>
                     <Select 
                       value={idVendedor || 'all'} 
                       onValueChange={(value) => setIdVendedor(value === 'all' ? '' : value)}
@@ -613,7 +613,7 @@ export default function SalesHistory() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Fecha</TableHead>
-                    {user?.rol === 'admin' && <TableHead>Vendedor</TableHead>}
+                    {user?.rol === 'admin' && <TableHead>Vendedor Tienda</TableHead>}
                     <TableHead>Producto</TableHead>
                     <TableHead>Método</TableHead>
                     <TableHead>Estado</TableHead>
@@ -838,7 +838,7 @@ export default function SalesHistory() {
                 </div>
                 {user?.rol === 'admin' && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Vendedor</p>
+                    <p className="text-sm text-muted-foreground">Vendedor Tienda</p>
                     <p className="font-medium mt-1">{getVendedorName(selectedSale.id_vendedor)}</p>
                   </div>
                 )}

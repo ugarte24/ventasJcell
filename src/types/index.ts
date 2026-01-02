@@ -1,6 +1,6 @@
 // J-Cell Type Definitions
 
-export type UserRole = 'admin' | 'vendedor';
+export type UserRole = 'admin' | 'vendedor' | 'minorista' | 'mayorista';
 
 export interface User {
   id: string;
@@ -16,7 +16,8 @@ export interface Product {
   id: string;
   nombre: string;
   descripcion?: string;
-  precio_venta: number;
+  precio_por_unidad: number;
+  precio_por_mayor?: number;
   codigo: string;
   id_categoria?: string;
   stock_actual: number;
@@ -85,6 +86,42 @@ export interface SaleDetail {
   cantidad: number;
   precio_unitario: number;
   subtotal: number;
+}
+
+export interface PreregistroMinorista {
+  id: string;
+  id_producto: string;
+  cantidad: number;
+  fecha: string;
+  created_at: string;
+  updated_at: string;
+  // Datos relacionados
+  producto?: Product;
+}
+
+export interface PreregistroMayorista {
+  id: string;
+  id_mayorista: string;
+  id_producto: string;
+  cantidad: number;
+  fecha: string;
+  created_at: string;
+  updated_at: string;
+  // Datos relacionados
+  producto?: Product;
+  mayorista?: User;
+}
+
+export interface PreregistroVentaItem {
+  id: string;
+  nombre: string;
+  cantidad: number;
+  aumento: number; // Campo para aumentar cantidad
+  cantidadRestante: number;
+  subtotal: number;
+  precio_unitario: number;
+  id_producto: string;
+  codigo?: string;
 }
 
 export interface CashRegister {
@@ -172,7 +209,7 @@ export const mockProducts: Product[] = [
     id: '1',
     nombre: 'Coca Cola 2L',
     descripcion: 'Bebida gaseosa',
-    precio_venta: 15,
+    precio_por_unidad: 15,
     codigo: 'BEB001',
     stock_actual: 50,
     stock_minimo: 10,
@@ -183,7 +220,7 @@ export const mockProducts: Product[] = [
     id: '2',
     nombre: 'Pan de Molde',
     descripcion: 'Pan blanco',
-    precio_venta: 12,
+    precio_por_unidad: 12,
     codigo: 'PAN001',
     stock_actual: 25,
     stock_minimo: 5,
@@ -194,7 +231,7 @@ export const mockProducts: Product[] = [
     id: '3',
     nombre: 'Leche Gloria 1L',
     descripcion: 'Leche evaporada',
-    precio_venta: 8.5,
+    precio_por_unidad: 8.5,
     codigo: 'LAC001',
     stock_actual: 40,
     stock_minimo: 10,
@@ -205,7 +242,7 @@ export const mockProducts: Product[] = [
     id: '4',
     nombre: 'Arroz Grano de Oro 1kg',
     descripcion: 'Arroz extra',
-    precio_venta: 9,
+    precio_por_unidad: 9,
     codigo: 'ARR001',
     stock_actual: 60,
     stock_minimo: 15,
@@ -216,7 +253,7 @@ export const mockProducts: Product[] = [
     id: '5',
     nombre: 'Aceite Fino 1L',
     descripcion: 'Aceite vegetal',
-    precio_venta: 18,
+    precio_por_unidad: 18,
     codigo: 'ACE001',
     stock_actual: 30,
     stock_minimo: 8,
@@ -227,7 +264,7 @@ export const mockProducts: Product[] = [
     id: '6',
     nombre: 'Azúcar Bermejo 1kg',
     descripcion: 'Azúcar refinada',
-    precio_venta: 8,
+    precio_por_unidad: 8,
     codigo: 'AZU001',
     stock_actual: 45,
     stock_minimo: 10,
@@ -238,7 +275,7 @@ export const mockProducts: Product[] = [
     id: '7',
     nombre: 'Fideos Coronilla 400g',
     descripcion: 'Fideos spaghetti',
-    precio_venta: 6,
+    precio_por_unidad: 6,
     codigo: 'FID001',
     stock_actual: 55,
     stock_minimo: 12,
@@ -249,7 +286,7 @@ export const mockProducts: Product[] = [
     id: '8',
     nombre: 'Atún Real 170g',
     descripcion: 'Atún en lata',
-    precio_venta: 14,
+    precio_por_unidad: 14,
     codigo: 'ATU001',
     stock_actual: 35,
     stock_minimo: 8,

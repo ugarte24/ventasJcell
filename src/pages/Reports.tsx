@@ -313,7 +313,7 @@ export default function Reports() {
         columns: [
           { header: 'Fecha', dataKey: 'fecha', width: 25 },
           { header: 'Hora', dataKey: 'hora', width: 20 },
-          { header: 'Vendedor', dataKey: 'id_vendedor', width: 40 },
+          { header: 'Vendedor Tienda', dataKey: 'id_vendedor', width: 40 },
           { header: 'Productos', dataKey: 'productos', width: 60 },
           { header: 'Total', dataKey: 'total', width: 30 },
           { header: 'Método de Pago', dataKey: 'metodo_pago', width: 35 },
@@ -371,7 +371,7 @@ export default function Reports() {
         columns: [
           { header: 'Fecha', dataKey: 'fecha', width: 25 },
           { header: 'Hora', dataKey: 'hora', width: 20 },
-          { header: 'Vendedor', dataKey: 'id_vendedor', width: 40 },
+          { header: 'Vendedor Tienda', dataKey: 'id_vendedor', width: 40 },
           { header: 'Productos', dataKey: 'productos', width: 60 },
           { header: 'Total', dataKey: 'total', width: 30 },
           { header: 'Método de Pago', dataKey: 'metodo_pago', width: 35 },
@@ -749,7 +749,7 @@ export default function Reports() {
 
               {user?.rol === 'admin' && (
                 <div className="space-y-2">
-                  <Label htmlFor="vendedor">Vendedor</Label>
+                  <Label htmlFor="vendedor">Vendedor Tienda</Label>
                   <Select 
                     value={idVendedor || 'all'} 
                     onValueChange={(value) => setIdVendedor(value === 'all' ? '' : value)}
@@ -1017,7 +1017,7 @@ export default function Reports() {
         {user?.rol === 'admin' && vendedoresStats.length > 0 && (
           <Card className="animate-slide-up">
             <CardHeader>
-              <CardTitle className="font-display">Rendimiento de Vendedores</CardTitle>
+              <CardTitle className="font-display">Rendimiento de Vendedores Tienda</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">

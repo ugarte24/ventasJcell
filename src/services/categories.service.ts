@@ -34,7 +34,36 @@ export const categoriesService = {
     return data as Category;
   },
 
+  async getByName(nombre: string, excludeId?: string): Promise<Category | null> {
+    // Buscar todas las categorías con ese nombre (case-insensitive)
+    const { data, error } = await supabase
+      .from('categorias')
+      .select('*')
+      .ilike('nombre', nombre);
+
+    if (error) {
+      throw new Error(handleSupabaseError(error));
+    }
+
+    if (!data || data.length === 0) {
+      return null;
+    }
+
+    // Si se proporciona excludeId, excluir esa categoría (útil para edición)
+    const found = excludeId 
+      ? data.find(cat => cat.id !== excludeId)
+      : data[0];
+
+    return found ? (found as Category) : null;
+  },
+
   async create(category: Omit<Category, 'id'>): Promise<Category> {
+    // Verificar si ya existe una categoría con el mismo nombre
+    const existing = await this.getByName(category.nombre);
+    if (existing) {
+      throw new Error('Ya existe una categoría con ese nombre');
+    }
+
     // Obtener timestamps en hora local
     const createdAt = getLocalDateTimeISO();
     const updatedAt = getLocalDateTimeISO();
@@ -56,6 +85,14 @@ export const categoriesService = {
   },
 
   async update(id: string, updates: Partial<Category>): Promise<Category> {
+    // Si se está actualizando el nombre, verificar que no exista otra categoría con ese nombre
+    if (updates.nombre) {
+      const existing = await this.getByName(updates.nombre, id);
+      if (existing) {
+        throw new Error('Ya existe una categoría con ese nombre');
+      }
+    }
+
     // Obtener timestamp de actualización en hora local
     const updatedAt = getLocalDateTimeISO();
     

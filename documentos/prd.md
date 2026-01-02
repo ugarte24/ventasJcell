@@ -74,7 +74,7 @@ En el negocio no existe un control digital de inventarios, clientes ni ventas. L
   id: string;                    // UUID o auth_uid
   nombre: string;                 // Nombre completo
   usuario: string;                 // Username único
-  rol: 'admin' | 'vendedor';      // Rol del usuario
+  rol: 'admin' | 'vendedor' | 'minorista' | 'mayorista';  // Rol del usuario
   estado: 'activo' | 'inactivo';  // Estado de la cuenta
   fecha_creacion: string;         // ISO date string
 }
@@ -87,7 +87,8 @@ En el negocio no existe un control digital de inventarios, clientes ni ventas. L
   id: string;
   nombre: string;
   descripcion?: string;
-  precio_venta: number;
+  precio_por_unidad: number;      // Precio de venta por unidad
+  precio_por_mayor?: number;       // Precio de venta al por mayor (opcional)
   codigo: string;                 // Código único del producto
   id_categoria?: string;
   stock_actual: number;
@@ -518,6 +519,29 @@ Los reportes se generan dinámicamente a partir de:
 - ✅ Preservación de estado del sidebar: La posición de scroll y el estado de secciones abiertas/cerradas se mantienen al navegar entre páginas
 - ✅ Corrección de mensajes duplicados: Eliminación de mensajes de éxito duplicados en la edición de movimientos
 
+**Cambios en v2.16.0:**
+- **Cambio de roles**: Actualización de roles de usuario - "Vendedor" ahora se muestra como "Vendedor Tienda" en la interfaz, mientras que el valor interno en la base de datos se mantiene como 'vendedor'
+- **Nuevos roles**: Agregados roles 'minorista' y 'mayorista' para gestionar diferentes tipos de clientes
+- **Campos de precio en productos**: 
+  - Renombrado "Precio de Venta" a "Precio por Unidad" en toda la aplicación
+  - Agregado campo opcional "Precio por Mayor" para productos con precios diferenciados
+  - Migración de base de datos: columna `precio_venta` renombrada a `precio_por_unidad`
+- **Compresión de imágenes mejorada**: Límite de compresión reducido de 5MB a 1MB para optimizar mejor el almacenamiento
+- **Eliminación de funcionalidades**: 
+  - Eliminado botón "Eliminar" de las acciones en la lista de categorías
+  - Eliminado botón "Eliminar" de las acciones en la lista de productos
+- **Validación de categorías**: Implementada validación para prevenir creación o actualización de categorías con nombres duplicados (case-insensitive)
+- **Sistema de preregistros**: 
+  - Implementado sistema de preregistros para roles 'minorista' y 'mayorista'
+  - Los preregistros muestran una tabla con productos, cantidades, aumentos y cantidad restante
+  - Cálculo de subtotales usando fórmula: `(cantidad + aumento - cantidadRestante) * precio`
+  - Para mayoristas: usa `precio_por_mayor` si existe, si no usa 0 (no usa `precio_por_unidad` como fallback)
+  - Para minoristas: usa `precio_por_unidad`
+- **Edge Function create-user**: 
+  - Corrección de la función para seguir el mismo patrón que `update-user-email` y `get-user-email`
+  - Simplificación del código y uso de `.single()` en lugar de `.maybeSingle()` para verificación de roles
+  - Soporte completo para creación de usuarios con roles 'minorista' y 'mayorista'
+
 **Cambios en v2.15.0:**
 - **Rebranding completo**: Cambio de nombre de "VentaPlus" a "J-Cell" en toda la aplicación (interfaz, documentación, tickets, reportes)
 - **Nuevo logo**: Icono simplificado mostrando solo la letra "J" con contorno azul (#2563EB) sobre fondo negro, reemplazando el logo "V+" anterior
@@ -633,7 +657,7 @@ Los reportes se generan dinámicamente a partir de:
 
 **Versión del PRD:** 2.16  
 **Última actualización:** Diciembre 2025  
-**Estado del Proyecto:** v2.16.0 - Sistema Completo con Captura de Cámara y Compresión Automática de Imágenes
+**Estado del Proyecto:** v2.16.0 - Sistema Completo con Preregistros, Roles Minorista/Mayorista y Gestión de Precios Mejorada
 
 ### 📝 Notas Técnicas Importantes
 

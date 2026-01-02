@@ -51,13 +51,8 @@ export default function Login() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4" translate="no">
       <div className="w-full max-w-md animate-fade-in" translate="no">
-        {/* Logo */}
+        {/* Título */}
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-black text-white font-display font-bold text-4xl shadow-lg">
-            <span className="text-white" style={{ textShadow: "0 0 3px #2563EB, 0 0 6px #2563EB" }}>
-              J
-            </span>
-          </div>
           <h1 className="font-display text-3xl font-bold text-foreground" translate="no">J-Cell</h1>
           <p className="mt-2 text-muted-foreground">Sistema de Gestión de Ventas</p>
         </div>

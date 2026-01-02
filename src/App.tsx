@@ -20,6 +20,8 @@ import CreditSales from "./pages/CreditSales";
 import Servicios from "./pages/Servicios";
 import ServiciosRegistro from "./pages/ServiciosRegistro";
 import ServiciosHistorial from "./pages/ServiciosHistorial";
+import PreregistrosMinorista from "./pages/PreregistrosMinorista";
+import PreregistrosMayorista from "./pages/PreregistrosMayorista";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -54,6 +56,8 @@ const App = () => (
               <Route path="/servicios/historial" element={<ServiciosHistorial />} />
               <Route path="/reportes" element={<Reports />} />
               <Route path="/usuarios" element={<Users />} />
+              <Route path="/preregistros/minorista" element={<PreregistrosMinorista />} />
+              <Route path="/preregistros/mayorista" element={<PreregistrosMayorista />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

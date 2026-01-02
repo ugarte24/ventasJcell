@@ -315,6 +315,29 @@ ventacontrol-pro/
   - ✅ Preservación de posición de scroll y estado de secciones en el sidebar
   - ✅ Corrección de mensajes duplicados en la edición de movimientos
 
+- ✅ **Mejoras en v2.16.0:**
+  - **Cambio de roles**: Actualización de roles de usuario - "Vendedor" ahora se muestra como "Vendedor Tienda" en la interfaz, mientras que el valor interno en la base de datos se mantiene como 'vendedor'
+  - **Nuevos roles**: Agregados roles 'minorista' y 'mayorista' para gestionar diferentes tipos de clientes
+  - **Campos de precio en productos**: 
+    - Renombrado "Precio de Venta" a "Precio por Unidad" en toda la aplicación
+    - Agregado campo opcional "Precio por Mayor" para productos con precios diferenciados
+    - Migración de base de datos: columna `precio_venta` renombrada a `precio_por_unidad`
+  - **Compresión de imágenes mejorada**: Límite de compresión reducido de 5MB a 1MB para optimizar mejor el almacenamiento
+  - **Eliminación de funcionalidades**: 
+    - Eliminado botón "Eliminar" de las acciones en la lista de categorías
+    - Eliminado botón "Eliminar" de las acciones en la lista de productos
+  - **Validación de categorías**: Implementada validación para prevenir creación o actualización de categorías con nombres duplicados (case-insensitive)
+  - **Sistema de preregistros**: 
+    - Implementado sistema de preregistros para roles 'minorista' y 'mayorista'
+    - Los preregistros muestran una tabla con productos, cantidades, aumentos y cantidad restante
+    - Cálculo de subtotales usando fórmula: `(cantidad + aumento - cantidadRestante) * precio`
+    - Para mayoristas: usa `precio_por_mayor` si existe, si no usa 0 (no usa `precio_por_unidad` como fallback)
+    - Para minoristas: usa `precio_por_unidad`
+  - **Edge Function create-user**: 
+    - Corrección de la función para seguir el mismo patrón que `update-user-email` y `get-user-email`
+    - Simplificación del código y uso de `.single()` en lugar de `.maybeSingle()` para verificación de roles
+    - Soporte completo para creación de usuarios con roles 'minorista' y 'mayorista'
+
 - ✅ **Mejoras en v2.15.0:**
   - **Rebranding completo**: Cambio de nombre de "VentaPlus" a "J-Cell" en toda la aplicación
   - **Nuevo logo**: Icono simplificado mostrando solo la letra "J" con contorno azul (#2563EB) sobre fondo negro
@@ -444,4 +467,4 @@ El sistema implementa un manejo robusto de fechas para evitar problemas de zona 
 
 **Versión**: 2.16.0  
 **Última actualización**: Diciembre 2025  
-**Estado**: Sistema completo con Captura de Cámara y Compresión Automática de Imágenes - En producción
+**Estado**: Sistema completo con Preregistros, Roles Minorista/Mayorista y Gestión de Precios Mejorada - En producción

@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Home, ShoppingCart, Package, BarChart3, Users, Settings, LogOut, Receipt, FolderTree, UserCircle, Wallet, ArrowLeftRight, DollarSign, Wrench, Calendar, History, Search, ChevronDown, ChevronRight } from 'lucide-react';
+import { Home, ShoppingCart, Package, BarChart3, Users, Settings, LogOut, Receipt, FolderTree, UserCircle, Wallet, ArrowLeftRight, DollarSign, Wrench, Calendar, History, Search, ChevronDown, ChevronRight, ClipboardList, Store } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/contexts';
 import {
@@ -41,7 +41,7 @@ const menuSections = [
   {
     label: 'Ventas',
     items: [
-      { title: 'Nueva Venta', url: '/ventas/nueva', icon: ShoppingCart, roles: ['admin', 'vendedor'] },
+      { title: 'Nueva Venta', url: '/ventas/nueva', icon: ShoppingCart, roles: ['admin', 'vendedor', 'minorista', 'mayorista'] },
       { title: 'Historial de Ventas', url: '/ventas', icon: Receipt, roles: ['admin', 'vendedor'] },
       { title: 'Ventas a Crédito', url: '/creditos', icon: DollarSign, roles: ['admin', 'vendedor'] },
     ],
@@ -52,6 +52,8 @@ const menuSections = [
       { title: 'Productos', url: '/productos', icon: Package, roles: ['admin'] },
       { title: 'Categorías', url: '/categorias', icon: FolderTree, roles: ['admin'] },
       { title: 'Movimientos Inventario', url: '/inventario/movimientos', icon: ArrowLeftRight, roles: ['admin'] },
+      { title: 'Preregistros Minorista', url: '/preregistros/minorista', icon: ClipboardList, roles: ['admin'] },
+      { title: 'Preregistros Mayorista', url: '/preregistros/mayorista', icon: Store, roles: ['admin'] },
     ],
   },
   {

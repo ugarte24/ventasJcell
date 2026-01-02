@@ -85,7 +85,7 @@ const createUserSchema = z.object({
   usuario: z.string().min(3, 'El usuario debe tener al menos 3 caracteres'),
   email: z.string().email('Email inválido'),
   password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
-  rol: z.enum(['admin', 'vendedor']),
+  rol: z.enum(['admin', 'vendedor', 'minorista', 'mayorista']),
   estado: z.enum(['activo', 'inactivo']).optional(),
 });
 
@@ -93,7 +93,7 @@ const updateUserSchema = z.object({
   nombre: z.string().min(2, 'El nombre debe tener al menos 2 caracteres').optional(),
   usuario: z.string().min(3, 'El usuario debe tener al menos 3 caracteres').optional(),
   email: z.string().email('Email inválido').optional().or(z.literal('')),
-  rol: z.enum(['admin', 'vendedor']).optional(),
+  rol: z.enum(['admin', 'vendedor', 'minorista', 'mayorista']).optional(),
   estado: z.enum(['activo', 'inactivo']).optional(),
 });
 
@@ -332,7 +332,7 @@ export default function Users() {
                   <User className="h-6 w-6 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Vendedores</p>
+                  <p className="text-sm text-muted-foreground">Vendedores Tienda</p>
                   <p className="font-display text-2xl font-bold text-foreground">
                     {isLoading ? '...' : stats.vendedores}
                   </p>
@@ -441,8 +441,12 @@ export default function Users() {
                           >
                             {user.rol === 'admin' ? (
                               <><Shield className="mr-1 h-3 w-3" /> Admin</>
+                            ) : user.rol === 'vendedor' ? (
+                              <><User className="mr-1 h-3 w-3" /> Vendedor Tienda</>
+                            ) : user.rol === 'minorista' ? (
+                              <><User className="mr-1 h-3 w-3" /> Minorista</>
                             ) : (
-                              <><User className="mr-1 h-3 w-3" /> Vendedor</>
+                              <><User className="mr-1 h-3 w-3" /> Mayorista</>
                             )}
                           </Badge>
                         </TableCell>
@@ -641,7 +645,9 @@ export default function Users() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="admin">Administrador</SelectItem>
-                      <SelectItem value="vendedor">Vendedor</SelectItem>
+                      <SelectItem value="vendedor">Vendedor Tienda</SelectItem>
+                      <SelectItem value="minorista">Minorista</SelectItem>
+                      <SelectItem value="mayorista">Mayorista</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -744,7 +750,9 @@ export default function Users() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="admin">Administrador</SelectItem>
-                      <SelectItem value="vendedor">Vendedor</SelectItem>
+                      <SelectItem value="vendedor">Vendedor Tienda</SelectItem>
+                      <SelectItem value="minorista">Minorista</SelectItem>
+                      <SelectItem value="mayorista">Mayorista</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

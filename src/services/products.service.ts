@@ -72,7 +72,8 @@ export const productsService = {
       .insert({
         nombre: product.nombre,
         descripcion: product.descripcion,
-        precio_venta: product.precio_venta,
+        precio_por_unidad: product.precio_por_unidad,
+        precio_por_mayor: product.precio_por_mayor,
         codigo: product.codigo,
         id_categoria: product.id_categoria,
         stock_actual: product.stock_actual,

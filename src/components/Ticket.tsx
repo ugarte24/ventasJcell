@@ -48,7 +48,7 @@ export function Ticket({ sale, items, vendedor, cliente }: TicketProps) {
         </div>
         {vendedor && (
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
-            <span>Vendedor:</span>
+            <span>Vendedor Tienda:</span>
             <span>{vendedor}</span>
           </div>
         )}
@@ -77,7 +77,7 @@ export function Ticket({ sale, items, vendedor, cliente }: TicketProps) {
             ? item.nombre 
             : 'N/A';
           const cantidad = item.cantidad;
-          const precio = 'precio_unitario' in item ? item.precio_unitario : item.precio_venta;
+          const precio = 'precio_unitario' in item ? item.precio_unitario : item.precio_por_unidad;
           const subtotal = 'subtotal' in item ? item.subtotal : cantidad * precio;
 
           return (

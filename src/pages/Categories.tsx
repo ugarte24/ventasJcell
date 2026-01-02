@@ -149,6 +149,17 @@ export default function Categories() {
 
   const handleCreateCategory = async (data: CreateCategoryForm) => {
     try {
+      // Verificar si ya existe una categoría con ese nombre (case-insensitive)
+      const nombreNormalizado = data.nombre.trim().toLowerCase();
+      const existe = categories.some(
+        cat => cat.nombre.trim().toLowerCase() === nombreNormalizado
+      );
+      
+      if (existe) {
+        toast.error('Ya existe una categoría con ese nombre');
+        return;
+      }
+
       await createCategoryMutation.mutateAsync({
         nombre: data.nombre,
         descripcion: data.descripcion || undefined,
@@ -165,6 +176,19 @@ export default function Categories() {
   const handleUpdateCategory = async (data: UpdateCategoryForm) => {
     if (!selectedCategory) return;
     try {
+      // Si se está cambiando el nombre, verificar que no exista otra categoría con ese nombre
+      if (data.nombre && data.nombre.trim().toLowerCase() !== selectedCategory.nombre.trim().toLowerCase()) {
+        const nombreNormalizado = data.nombre.trim().toLowerCase();
+        const existe = categories.some(
+          cat => cat.id !== selectedCategory.id && cat.nombre.trim().toLowerCase() === nombreNormalizado
+        );
+        
+        if (existe) {
+          toast.error('Ya existe una categoría con ese nombre');
+          return;
+        }
+      }
+
       await updateCategoryMutation.mutateAsync({
         id: selectedCategory.id,
         updates: data,
@@ -358,14 +382,6 @@ export default function Categories() {
                                 disabled={toggleStatusMutation.isPending}
                               >
                                 {category.estado === 'activo' ? 'Desactivar' : 'Activar'}
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem 
-                                onClick={() => openDeleteDialog(category)}
-                                className="text-destructive"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Eliminar
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>

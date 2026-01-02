@@ -8,7 +8,7 @@ export interface CreateUserData {
   usuario: string;
   email: string;
   password: string;
-  rol: 'admin' | 'vendedor';
+  rol: 'admin' | 'vendedor' | 'minorista' | 'mayorista';
   estado?: 'activo' | 'inactivo';
 }
 
@@ -16,7 +16,7 @@ export interface UpdateUserData {
   nombre?: string;
   usuario?: string;
   email?: string;
-  rol?: 'admin' | 'vendedor';
+  rol?: 'admin' | 'vendedor' | 'minorista' | 'mayorista';
   estado?: 'activo' | 'inactivo';
 }
 
@@ -155,10 +155,16 @@ export const usersService = {
         throw new Error('No tienes una sesión activa. Por favor inicia sesión nuevamente.');
       }
 
+      // Verificar que el token existe
+      if (!session.access_token) {
+        throw new Error('Token de acceso no disponible. Por favor inicia sesión nuevamente.');
+      }
+
       // Obtener fecha y hora local del cliente
       const fechaCreacion = getLocalDateTimeISO();
       
       // Llamar a la Edge Function
+      // Nota: El header Authorization debe pasarse manualmente
       const { data: functionData, error: functionError } = await supabase.functions.invoke('create-user', {
         body: {
           nombre: userData.nombre,

@@ -71,8 +71,8 @@ export async function compressImage(
 ): Promise<File> {
   const maxSizeBytes = maxSizeMB * 1024 * 1024;
   
-  // Si el archivo ya es menor al límite (menos de 5MB), devolverlo tal cual
-  // Las imágenes de 5MB o más se comprimirán gradualmente
+  // Si el archivo ya es menor al límite, devolverlo tal cual
+  // Las imágenes que excedan el límite se comprimirán gradualmente
   if (file.size < maxSizeBytes) {
     return file;
   }
@@ -140,7 +140,7 @@ export async function compressImage(
                   compressWithQuality(0.6).then(resolveQuality).catch(rejectQuality);
                 } else {
                   // Si ya está en el mínimo de calidad (0.6) y dimensiones razonables, aceptar el archivo
-                  // (aunque sea ligeramente mayor a 5MB, es mejor que perder más calidad visual)
+                  // (aunque sea ligeramente mayor al límite, es mejor que perder más calidad visual)
                   const compressedFile = new File(
                     [blob],
                     file.name,

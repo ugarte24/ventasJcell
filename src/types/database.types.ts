@@ -101,7 +101,7 @@ export interface Database {
           id: string
           nombre: string
           descripcion: string | null
-          precio_venta: number
+          precio_por_unidad: number
           codigo: string
           id_categoria: string | null
           stock_actual: number
@@ -116,7 +116,7 @@ export interface Database {
           id?: string
           nombre: string
           descripcion?: string | null
-          precio_venta: number
+          precio_por_unidad: number
           codigo: string
           id_categoria?: string | null
           stock_actual?: number

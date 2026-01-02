@@ -36,11 +36,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
       if (existingItem) {
         return current.map(item =>
           item.id === product.id
-            ? { ...item, cantidad: newQuantity, subtotal: newQuantity * item.precio_venta }
+            ? { ...item, cantidad: newQuantity, subtotal: newQuantity * item.precio_por_unidad }
             : item
         );
       }
-      return [...current, { ...product, cantidad: 1, subtotal: product.precio_venta }];
+      return [...current, { ...product, cantidad: 1, subtotal: product.precio_por_unidad }];
     });
   };
 
@@ -67,7 +67,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
       return current.map(i =>
         i.id === productId
-          ? { ...i, cantidad: quantity, subtotal: quantity * i.precio_venta }
+          ? { ...i, cantidad: quantity, subtotal: quantity * i.precio_por_unidad }
           : i
       );
     });

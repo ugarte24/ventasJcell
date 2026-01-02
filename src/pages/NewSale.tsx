@@ -6,7 +6,9 @@ import { useAuth } from '@/contexts';
 import { useProducts, useSearchProducts } from '@/hooks/useProducts';
 import { useCreateSale } from '@/hooks/useSales';
 import { useClients, useSearchClients } from '@/hooks/useClients';
-import { Sale } from '@/types';
+import { Sale, PreregistroVentaItem } from '@/types';
+import { preregistrosService } from '@/services/preregistros.service';
+import { getLocalDateISO } from '@/lib/utils';
 import { printTicket } from '@/utils/print';
 import { salesService } from '@/services/sales.service';
 import { usersService } from '@/services/users.service';
@@ -17,6 +19,14 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { 
   Search, 
   Plus, 
@@ -30,7 +40,9 @@ import {
   Loader,
   Printer,
   Package,
-  User
+  User,
+  Edit,
+  X
 } from 'lucide-react';
 import {
   Command,
@@ -109,6 +121,100 @@ export default function NewSale() {
   const { data: clientSearchResults = [] } = useSearchClients(clientSearchTerm);
   const createSaleMutation = useCreateSale();
 
+  // Estados para preregistros (minorista/mayorista)
+  const [preregistroItems, setPreregistroItems] = useState<PreregistroVentaItem[]>([]);
+  const [isLoadingPreregistros, setIsLoadingPreregistros] = useState(false);
+  const [editingCantidadRestante, setEditingCantidadRestante] = useState<string | null>(null);
+  const [editCantidadRestanteValue, setEditCantidadRestanteValue] = useState<string>('');
+
+  // Cargar preregistros si es minorista o mayorista
+  useEffect(() => {
+    const loadPreregistros = async () => {
+      if (!user || (user.rol !== 'minorista' && user.rol !== 'mayorista')) {
+        return;
+      }
+
+      try {
+        setIsLoadingPreregistros(true);
+        const fecha = getLocalDateISO();
+        
+        if (user.rol === 'minorista') {
+          const preregistros = await preregistrosService.getPreregistrosMinorista(fecha);
+          const items: PreregistroVentaItem[] = preregistros.map(p => ({
+            id: p.id,
+            nombre: p.producto?.nombre || 'N/A',
+            codigo: p.producto?.codigo,
+            cantidad: p.cantidad,
+            aumento: 0,
+            cantidadRestante: p.cantidad,
+            precio_unitario: p.producto?.precio_por_unidad || 0,
+            subtotal: 0,
+            id_producto: p.id_producto,
+          }));
+          // Calcular subtotales iniciales
+          items.forEach(item => {
+            item.subtotal = (item.cantidad + item.aumento - item.cantidadRestante) * item.precio_unitario;
+          });
+          setPreregistroItems(items);
+        } else if (user.rol === 'mayorista') {
+          const preregistros = await preregistrosService.getPreregistrosMayorista(user.id, fecha);
+          const items: PreregistroVentaItem[] = preregistros.map(p => ({
+            id: p.id,
+            nombre: p.producto?.nombre || 'N/A',
+            codigo: p.producto?.codigo,
+            cantidad: p.cantidad,
+            aumento: 0,
+            cantidadRestante: p.cantidad,
+            precio_unitario: p.producto?.precio_por_mayor ?? 0,
+            subtotal: 0,
+            id_producto: p.id_producto,
+          }));
+          // Calcular subtotales iniciales
+          items.forEach(item => {
+            item.subtotal = (item.cantidad + item.aumento - item.cantidadRestante) * item.precio_unitario;
+          });
+          setPreregistroItems(items);
+        }
+      } catch (error: any) {
+        toast.error(error.message || 'Error al cargar preregistros');
+      } finally {
+        setIsLoadingPreregistros(false);
+      }
+    };
+
+    loadPreregistros();
+  }, [user]);
+
+  // Función para actualizar cantidadRestante
+  const handleUpdateCantidadRestante = (itemId: string, newValue: number) => {
+    setPreregistroItems(prev => prev.map(item => {
+      if (item.id === itemId) {
+        const cantidadRestante = Math.max(0, Math.min(newValue, item.cantidad + item.aumento));
+        const subtotal = (item.cantidad + item.aumento - cantidadRestante) * item.precio_unitario;
+        return { ...item, cantidadRestante, subtotal };
+      }
+      return item;
+    }));
+  };
+
+  // Función para actualizar aumento
+  const handleUpdateAumento = (itemId: string, newValue: number) => {
+    setPreregistroItems(prev => prev.map(item => {
+      if (item.id === itemId) {
+        const aumento = Math.max(0, newValue);
+        const cantidadRestante = Math.min(item.cantidadRestante, item.cantidad + aumento);
+        const subtotal = (item.cantidad + aumento - cantidadRestante) * item.precio_unitario;
+        return { ...item, aumento, cantidadRestante, subtotal };
+      }
+      return item;
+    }));
+  };
+
+  // Calcular total de preregistros
+  const preregistroTotal = useMemo(() => {
+    return preregistroItems.reduce((sum, item) => sum + item.subtotal, 0);
+  }, [preregistroItems]);
+
   const filteredProducts = useMemo(() => {
     if (searchTerm.length > 0 && searchResults.length > 0) {
       return searchResults;
@@ -128,13 +234,139 @@ export default function NewSale() {
   }, [searchTerm]);
 
   const handleCompleteSale = async () => {
-    if (items.length === 0) {
-      toast.error('Agrega productos al carrito');
+    if (!user) {
+      toast.error('Debes estar autenticado');
       return;
     }
 
-    if (!user) {
-      toast.error('Debes estar autenticado');
+    // Si es minorista o mayorista, usar preregistros
+    if (user.rol === 'minorista' || user.rol === 'mayorista') {
+      if (preregistroItems.length === 0) {
+        toast.error('No hay preregistros para procesar');
+        return;
+      }
+
+      // Validar que haya al menos un item con cantidad vendida (cantidad + aumento - cantidadRestante > 0)
+      const itemsConVenta = preregistroItems.filter(item => 
+        (item.cantidad + item.aumento - item.cantidadRestante) > 0
+      );
+
+      if (itemsConVenta.length === 0) {
+        toast.error('Debes vender al menos un producto');
+        return;
+      }
+
+      // Validar stock antes de completar la venta
+      for (const item of itemsConVenta) {
+        const cantidadVendida = item.cantidad + item.aumento - item.cantidadRestante;
+        const producto = allProducts.find(p => p.id === item.id_producto);
+        if (!producto) {
+          toast.error(`Producto "${item.nombre}" no encontrado`);
+          return;
+        }
+        if (producto.estado !== 'activo') {
+          toast.error(`El producto "${item.nombre}" está inactivo`);
+          return;
+        }
+        if (cantidadVendida > producto.stock_actual) {
+          toast.error(
+            `Stock insuficiente para "${item.nombre}". Stock disponible: ${producto.stock_actual}, solicitado: ${cantidadVendida}`
+          );
+          return;
+        }
+      }
+
+      // Validar crédito
+      if (selectedPayment === 'credito') {
+        if (!selectedClient) {
+          toast.error('Debes seleccionar un cliente para ventas a crédito');
+          return;
+        }
+        if (!mesesCredito || mesesCredito <= 0) {
+          toast.error('Debes establecer la cantidad de cuotas para el crédito');
+          return;
+        }
+      }
+
+      try {
+        const saleItems = itemsConVenta.map(item => {
+          const cantidadVendida = item.cantidad + item.aumento - item.cantidadRestante;
+          return {
+            id_producto: item.id_producto,
+            cantidad: cantidadVendida,
+            precio_unitario: item.precio_unitario,
+            subtotal: item.subtotal,
+          };
+        });
+
+        const saleData: any = {
+          total: preregistroTotal,
+          metodo_pago: selectedPayment,
+          id_vendedor: user.id,
+          items: saleItems,
+        };
+
+        // Agregar datos de crédito si es necesario
+        if (selectedPayment === 'credito' && selectedClient && mesesCredito) {
+          saleData.id_cliente = selectedClient.id;
+          saleData.meses_credito = mesesCredito;
+          saleData.tasa_interes = tasaInteres || 0;
+          if (cuotaInicialHabilitada && cuotaInicial > 0) {
+            saleData.cuota_inicial = cuotaInicial;
+          }
+        }
+
+        const newSale = await createSaleMutation.mutateAsync(saleData);
+
+        // Guardar datos de la venta
+        setSaleTotal(preregistroTotal);
+        setSaleItems(itemsConVenta.map(item => ({
+          ...allProducts.find(p => p.id === item.id_producto)!,
+          cantidad: item.cantidad + item.aumento - item.cantidadRestante,
+          subtotal: item.subtotal,
+        })));
+        setSaleItemCount(itemsConVenta.length);
+        setCreatedSale(newSale);
+        
+        // Limpiar preregistros procesados
+        setPreregistroItems(prev => prev.map(item => {
+          const cantidadVendida = item.cantidad + item.aumento - item.cantidadRestante;
+          if (cantidadVendida > 0) {
+            // Actualizar cantidadRestante a la nueva cantidad total (cantidad + aumento)
+            return { ...item, cantidadRestante: item.cantidad + item.aumento, subtotal: 0 };
+          }
+          return item;
+        }));
+
+        // Si es venta a crédito, resetear también los campos de crédito
+        if (selectedPayment === 'credito') {
+          setSelectedClient(null);
+          setClientSearchOpen(false);
+          setClientSearchTerm('');
+          setMesesCredito(1);
+          setMesesCreditoInput('1');
+          setTasaInteres(0);
+          setTasaInteresInput('');
+          setCuotaInicialHabilitada(false);
+          setCuotaInicial(0);
+          setCuotaInicialInput('');
+        }
+        
+        // Resetear método de pago a efectivo después de completar la venta
+        setSelectedPayment('efectivo');
+        
+        setShowSuccessDialog(true);
+        toast.success('Venta registrada exitosamente');
+        return;
+      } catch (error: any) {
+        toast.error(error.message || 'Error al registrar la venta');
+        return;
+      }
+    }
+
+    // Flujo normal para admin y vendedor
+    if (items.length === 0) {
+      toast.error('Agrega productos al carrito');
       return;
     }
 
@@ -168,7 +400,7 @@ export default function NewSale() {
       const saleItems = items.map(item => ({
         id_producto: item.id,
         cantidad: Number(item.cantidad) || 0,
-        precio_unitario: Number(item.precio_venta) || 0,
+        precio_unitario: Number(item.precio_por_unidad) || 0,
         subtotal: Number(item.subtotal) || 0,
       }));
 
@@ -359,16 +591,160 @@ export default function NewSale() {
       <div className={cn("grid gap-4 sm:gap-6", isDesktopLarge && "lg:grid-cols-3")}>
         {/* Products Section */}
         <div className={cn("space-y-3 sm:space-y-4", isDesktopLarge && "lg:col-span-2")}>
-          {/* Search */}
-          <div className="relative animate-fade-in">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por nombre o código..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="h-11 sm:h-12 pl-10 text-sm sm:text-base"
-            />
-          </div>
+          {/* Mostrar tabla de preregistros si es minorista o mayorista */}
+          {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
+            <Card className="animate-fade-in">
+              <CardHeader>
+                <CardTitle>
+                  {user.rol === 'minorista' ? 'Preregistros Minorista' : 'Preregistros Mayorista'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isLoadingPreregistros ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Cargando preregistros...
+                  </div>
+                ) : preregistroItems.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No hay preregistros para el día de hoy
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="rounded-lg border overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Nombre</TableHead>
+                            <TableHead className="text-right">Cantidad</TableHead>
+                            <TableHead className="text-right">Aumento</TableHead>
+                            <TableHead className="text-right">Cantidad Restante</TableHead>
+                            <TableHead className="text-right">Subtotal</TableHead>
+                            <TableHead className="text-right">Acciones</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {preregistroItems.map((item) => (
+                            <TableRow key={item.id}>
+                              <TableCell>
+                                <div>
+                                  <p className="font-medium">{item.nombre}</p>
+                                  {item.codigo && (
+                                    <p className="text-sm text-muted-foreground">{item.codigo}</p>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {item.cantidad}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {item.aumento}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {editingCantidadRestante === item.id ? (
+                                  <div className="flex items-center gap-2 justify-end">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      max={item.cantidad + item.aumento}
+                                      value={editCantidadRestanteValue}
+                                      onChange={(e) => setEditCantidadRestanteValue(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          const newValue = parseInt(editCantidadRestanteValue);
+                                          if (!isNaN(newValue)) {
+                                            handleUpdateCantidadRestante(item.id, newValue);
+                                            setEditingCantidadRestante(null);
+                                            setEditCantidadRestanteValue('');
+                                          }
+                                        } else if (e.key === 'Escape') {
+                                          setEditingCantidadRestante(null);
+                                          setEditCantidadRestanteValue('');
+                                        }
+                                      }}
+                                      className="w-20 h-8"
+                                      autoFocus
+                                    />
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => {
+                                        const newValue = parseInt(editCantidadRestanteValue);
+                                        if (!isNaN(newValue)) {
+                                          handleUpdateCantidadRestante(item.id, newValue);
+                                          setEditingCantidadRestante(null);
+                                          setEditCantidadRestanteValue('');
+                                        }
+                                      }}
+                                    >
+                                      <CheckCircle className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => {
+                                        setEditingCantidadRestante(null);
+                                        setEditCantidadRestanteValue('');
+                                      }}
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setEditingCantidadRestante(item.id);
+                                      setEditCantidadRestanteValue(item.cantidadRestante.toString());
+                                    }}
+                                  >
+                                    {item.cantidadRestante}
+                                  </Button>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right font-semibold">
+                                Bs. {item.subtotal.toFixed(2)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setEditingCantidadRestante(item.id);
+                                    setEditCantidadRestanteValue(item.cantidadRestante.toString());
+                                  }}
+                                  disabled={editingCantidadRestante === item.id}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <div className="flex justify-between items-center pt-4 border-t">
+                      <p className="text-lg font-semibold">Total:</p>
+                      <p className="text-2xl font-bold text-primary">
+                        Bs. {preregistroTotal.toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* Search */}
+              <div className="relative animate-fade-in">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por nombre o código..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="h-11 sm:h-12 pl-10 text-sm sm:text-base"
+                />
+              </div>
 
           {/* Products Grid */}
           <div className="grid gap-2 sm:gap-3 grid-cols-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -456,7 +832,7 @@ export default function NewSale() {
                   </div>
                   <div className="mt-3 flex items-center justify-between">
                     <p className="font-display text-lg font-bold text-primary">
-                      Bs. {product.precio_venta.toFixed(2)}
+                      Bs. {product.precio_por_unidad.toFixed(2)}
                     </p>
                     {cartItem && (
                       <Badge variant="default" className="text-xs">
@@ -563,6 +939,8 @@ export default function NewSale() {
               Mostrando {startIndex + 1}-{Math.min(endIndex, filteredProducts.length)} de {filteredProducts.length} productos
             </div>
           )}
+            </>
+          )}
         </div>
 
         {/* Cart Section - Solo visible en desktop grande (≥1024px) */}
@@ -572,14 +950,64 @@ export default function NewSale() {
             <CardHeader className="border-b">
               <CardTitle className="flex items-center gap-2 font-display">
                 <ShoppingCart className="h-5 w-5" />
-                Carrito
-                {itemCount > 0 && (
-                  <Badge className="ml-auto">{itemCount}</Badge>
+                {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? 'Resumen de Venta' : 'Carrito'}
+                {!user || (user.rol !== 'minorista' && user.rol !== 'mayorista') ? (
+                  itemCount > 0 && (
+                    <Badge className="ml-auto">{itemCount}</Badge>
+                  )
+                ) : (
+                  preregistroItems.length > 0 && (
+                    <Badge className="ml-auto">{preregistroItems.length}</Badge>
+                  )
                 )}
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              {items.length === 0 ? (
+              {/* Mostrar preregistros si es minorista o mayorista */}
+              {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
+                preregistroItems.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <ShoppingCart className="h-12 w-12 text-muted-foreground/50" />
+                    <p className="mt-4 text-muted-foreground">No hay preregistros para el día de hoy</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="max-h-[300px] overflow-y-auto overscroll-contain">
+                      <div className="divide-y">
+                        {preregistroItems.map((item) => {
+                          const cantidadVendida = item.cantidad + item.aumento - item.cantidadRestante;
+                          return cantidadVendida > 0 ? (
+                            <div key={item.id} className="p-4">
+                              <div className="flex items-center gap-3 flex-nowrap">
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-medium text-foreground truncate">{item.nombre}</p>
+                                  <p className="text-sm text-muted-foreground truncate">
+                                    Bs. {item.precio_unitario.toFixed(2)} c/u
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className="w-12 text-center font-medium">{cantidadVendida}</span>
+                                </div>
+                              </div>
+                              <div className="mt-2 text-right">
+                                <p className="text-sm font-semibold">Bs. {item.subtotal.toFixed(2)}</p>
+                              </div>
+                            </div>
+                          ) : null;
+                        })}
+                      </div>
+                    </div>
+                    <div className="border-t p-3 sm:p-4">
+                      <div className="flex justify-between items-center mb-3">
+                        <p className="text-sm font-medium">Total:</p>
+                        <p className="text-xl font-bold text-primary">
+                          Bs. {preregistroTotal.toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                )
+              ) : items.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <ShoppingCart className="h-12 w-12 text-muted-foreground/50" />
                   <p className="mt-4 text-muted-foreground">El carrito está vacío</p>
@@ -613,7 +1041,7 @@ export default function NewSale() {
                           <div className="min-w-0 flex-1">
                             <p className="font-medium text-foreground truncate">{item.nombre}</p>
                               <p className="text-sm text-muted-foreground truncate">
-                              Bs. {item.precio_venta.toFixed(2)} c/u
+                              Bs. {item.precio_por_unidad.toFixed(2)} c/u
                             </p>
                           </div>
                             
@@ -865,7 +1293,7 @@ export default function NewSale() {
                               type="number"
                               step="0.01"
                               min="0"
-                              max={total}
+                              max={(user?.rol === 'minorista' || user?.rol === 'mayorista') ? preregistroTotal : total}
                               value={cuotaInicialInput !== '' ? cuotaInicialInput : (cuotaInicial > 0 ? cuotaInicial.toFixed(2) : '')}
                               onChange={(e) => {
                                 const inputValue = e.target.value;
@@ -876,19 +1304,21 @@ export default function NewSale() {
                                   return;
                                 }
                                 
+                                const currentTotal = (user?.rol === 'minorista' || user?.rol === 'mayorista') ? preregistroTotal : total;
                                 const numValue = parseFloat(inputValue);
-                                if (!isNaN(numValue) && numValue >= 0 && numValue <= total) {
+                                if (!isNaN(numValue) && numValue >= 0 && numValue <= currentTotal) {
                                   setCuotaInicial(numValue);
                                 }
                               }}
                               onBlur={(e) => {
                                 const numValue = parseFloat(e.target.value);
+                                const currentTotal = (user?.rol === 'minorista' || user?.rol === 'mayorista') ? preregistroTotal : total;
                                 if (isNaN(numValue) || numValue < 0) {
                                   setCuotaInicial(0);
                                   setCuotaInicialInput('');
-                                } else if (numValue > total) {
-                                  setCuotaInicial(total);
-                                  setCuotaInicialInput(total.toFixed(2));
+                                } else if (numValue > currentTotal) {
+                                  setCuotaInicial(currentTotal);
+                                  setCuotaInicialInput(currentTotal.toFixed(2));
                                 } else {
                                   setCuotaInicialInput(e.target.value);
                                 }
@@ -1005,7 +1435,7 @@ export default function NewSale() {
                             <div className="min-w-0 flex-1">
                               <p className="font-medium text-foreground truncate">{item.nombre}</p>
                               <p className="text-sm text-muted-foreground truncate">
-                                Bs. {item.precio_venta.toFixed(2)} c/u
+                                Bs. {item.precio_por_unidad.toFixed(2)} c/u
                               </p>
                             </div>
                             

@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   nombre VARCHAR(255) NOT NULL,
   usuario VARCHAR(100) NOT NULL UNIQUE,
   email VARCHAR(255),
-  rol VARCHAR(20) NOT NULL CHECK (rol IN ('admin', 'vendedor')),
+  rol VARCHAR(20) NOT NULL CHECK (rol IN ('admin', 'vendedor', 'minorista', 'mayorista')),
   estado VARCHAR(20) DEFAULT 'activo' NOT NULL CHECK (estado IN ('activo', 'inactivo')),
   fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
 
 COMMENT ON TABLE usuarios IS 'Usuarios del sistema que extienden auth.users de Supabase';
 COMMENT ON COLUMN usuarios.id IS 'ID del usuario en auth.users (UUID)';
-COMMENT ON COLUMN usuarios.rol IS 'Rol del usuario: admin o vendedor';
+COMMENT ON COLUMN usuarios.rol IS 'Rol del usuario: admin, vendedor, minorista o mayorista';
 
 -- Tabla: CATEGORIAS
 CREATE TABLE IF NOT EXISTS categorias (
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS productos (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nombre VARCHAR(255) NOT NULL,
   descripcion TEXT,
-  precio_venta NUMERIC(10, 2) NOT NULL CHECK (precio_venta >= 0),
+  precio_por_unidad NUMERIC(10, 2) NOT NULL CHECK (precio_por_unidad >= 0),
   codigo VARCHAR(100) NOT NULL UNIQUE,
   id_categoria UUID REFERENCES categorias(id) ON DELETE SET NULL,
   stock_actual INTEGER DEFAULT 0 NOT NULL CHECK (stock_actual >= 0),

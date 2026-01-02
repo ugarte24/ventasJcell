@@ -174,7 +174,7 @@ export function printTicket(data: PrintTicketData) {
         </div>
         ${data.vendedor ? `
         <div class="info-row">
-          <span>Vendedor:</span>
+          <span>Vendedor Tienda:</span>
           <span>${data.vendedor}</span>
         </div>
         ` : ''}
@@ -234,7 +234,7 @@ export function printTicket(data: PrintTicketData) {
             ? item.nombre 
             : 'N/A';
           const cantidad = item.cantidad;
-          const precio = 'precio_unitario' in item ? item.precio_unitario : item.precio_venta;
+          const precio = 'precio_unitario' in item ? item.precio_unitario : item.precio_por_unidad;
           const subtotal = 'subtotal' in item ? item.subtotal : cantidad * precio;
           
           return `

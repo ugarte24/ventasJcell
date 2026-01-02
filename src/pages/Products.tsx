@@ -107,7 +107,8 @@ import { cn, compressImage } from '@/lib/utils';
 const createProductSchema = z.object({
   nombre: z.string().min(2, 'El nombre debe tener al menos 2 caracteres'),
   descripcion: z.string().optional(),
-  precio_venta: z.number().min(0.01, 'El precio debe ser mayor a 0'),
+  precio_por_unidad: z.number().min(0.01, 'El precio debe ser mayor a 0'),
+  precio_por_mayor: z.number().min(0, 'El precio por mayor debe ser mayor o igual a 0').optional(),
   codigo: z.string().min(1, 'El código es requerido'),
   id_categoria: z.string().optional(),
   stock_actual: z.number().min(0, 'El stock no puede ser negativo').default(0),
@@ -119,6 +120,7 @@ const updateProductSchema = z.object({
   nombre: z.string().min(2, 'El nombre debe tener al menos 2 caracteres').optional(),
   descripcion: z.string().optional(),
   precio_venta: z.number().min(0.01, 'El precio debe ser mayor a 0').optional(),
+  precio_por_mayor: z.number().min(0, 'El precio por mayor debe ser mayor o igual a 0').optional(),
   codigo: z.string().min(1, 'El código es requerido').optional(),
   id_categoria: z.string().optional(),
   stock_minimo: z.number().min(0, 'El stock mínimo no puede ser negativo').optional(),
@@ -192,7 +194,8 @@ export default function Products() {
     defaultValues: {
       nombre: '',
       descripcion: '',
-      precio_venta: 0,
+      precio_por_unidad: 0,
+      precio_por_mayor: undefined,
       codigo: '',
       id_categoria: undefined,
       stock_actual: 0,
@@ -244,7 +247,8 @@ export default function Products() {
       const newProduct = await createProductMutation.mutateAsync({
         nombre: data.nombre,
         descripcion: data.descripcion || undefined,
-        precio_venta: data.precio_venta,
+        precio_por_unidad: data.precio_por_unidad,
+        precio_por_mayor: data.precio_por_mayor || undefined,
         codigo: data.codigo,
         id_categoria: data.id_categoria || undefined,
         stock_actual: data.stock_actual,
@@ -290,8 +294,8 @@ export default function Products() {
       }
       
       try {
-        // Comprimir imagen si es mayor a 5MB
-        const processedFile = await compressImage(file, 5);
+        // Comprimir imagen si es mayor a 1MB
+        const processedFile = await compressImage(file, 1);
         
         if (processedFile.size < file.size) {
           const reductionPercent = ((file.size - processedFile.size) / file.size * 100).toFixed(1);
@@ -356,7 +360,7 @@ export default function Products() {
             const originalFile = new File([blob], `foto-${Date.now()}.jpg`, { type: 'image/jpeg' });
             
             // Comprimir si es necesario
-            const processedFile = await compressImage(originalFile, 5);
+            const processedFile = await compressImage(originalFile, 1);
             
             if (processedFile.size < originalFile.size) {
               const reductionPercent = ((originalFile.size - processedFile.size) / originalFile.size * 100).toFixed(1);
@@ -422,7 +426,7 @@ export default function Products() {
             const originalFile = new File([blob], `foto-${Date.now()}.jpg`, { type: 'image/jpeg' });
             
             // Comprimir si es necesario
-            const processedFile = await compressImage(originalFile, 5);
+            const processedFile = await compressImage(originalFile, 1);
             
             if (processedFile.size < originalFile.size) {
               const reductionPercent = ((originalFile.size - processedFile.size) / originalFile.size * 100).toFixed(1);
@@ -535,8 +539,8 @@ export default function Products() {
       }
       
       try {
-        // Comprimir imagen si es mayor a 5MB
-        const processedFile = await compressImage(file, 5);
+        // Comprimir imagen si es mayor a 1MB
+        const processedFile = await compressImage(file, 1);
         
         if (processedFile.size < file.size) {
           const reductionPercent = ((file.size - processedFile.size) / file.size * 100).toFixed(1);
@@ -633,7 +637,8 @@ export default function Products() {
     updateForm.reset({
       nombre: product.nombre,
       descripcion: product.descripcion || '',
-      precio_venta: product.precio_venta,
+      precio_por_unidad: product.precio_por_unidad,
+      precio_por_mayor: product.precio_por_mayor || undefined,
       codigo: product.codigo,
       id_categoria: product.id_categoria || '',
       stock_minimo: product.stock_minimo,
@@ -804,7 +809,7 @@ export default function Products() {
                           </div>
                         </TableCell>
                         <TableCell className="font-semibold">
-                          Bs. {product.precio_venta.toFixed(2)}
+                          Bs. {product.precio_por_unidad.toFixed(2)}
                         </TableCell>
                         <TableCell>
                           <Badge 
@@ -842,14 +847,6 @@ export default function Products() {
                                 disabled={toggleStatusMutation.isPending}
                               >
                                 {product.estado === 'activo' ? 'Desactivar' : 'Activar'}
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem 
-                                onClick={() => openDeleteDialog(product)}
-                                className="text-destructive"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Eliminar
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -987,20 +984,37 @@ export default function Products() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="precio_venta">Precio de Venta (Bs.) *</Label>
+                    <Label htmlFor="precio_por_unidad">Precio por Unidad (Bs.) *</Label>
                     <Input
-                      id="precio_venta"
+                      id="precio_por_unidad"
                       type="number"
                       step="0.01"
-                      {...createForm.register('precio_venta', { valueAsNumber: true })}
+                      {...createForm.register('precio_por_unidad', { valueAsNumber: true })}
                       placeholder="0.00"
                     />
-                    {createForm.formState.errors.precio_venta && (
+                    {createForm.formState.errors.precio_por_unidad && (
                       <p className="text-sm text-destructive">
-                        {createForm.formState.errors.precio_venta.message}
+                        {createForm.formState.errors.precio_por_unidad.message}
                       </p>
                     )}
                   </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="precio_por_mayor">Precio por Mayor (Bs.)</Label>
+                    <Input
+                      id="precio_por_mayor"
+                      type="number"
+                      step="0.01"
+                      {...createForm.register('precio_por_mayor', { valueAsNumber: true })}
+                      placeholder="0.00"
+                    />
+                    {createForm.formState.errors.precio_por_mayor && (
+                      <p className="text-sm text-destructive">
+                        {createForm.formState.errors.precio_por_mayor.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label htmlFor="id_categoria">Categoría</Label>
                     <Popover open={categoryOpen} onOpenChange={setCategoryOpen} modal={false}>
@@ -1179,7 +1193,7 @@ export default function Products() {
                       </div>
                     )}
                     <p className="text-xs text-muted-foreground">
-                      Formatos soportados: JPG, PNG, GIF. Tamaño máximo: 5MB
+                      Formatos soportados: JPG, PNG, GIF. Tamaño máximo: 1MB
                     </p>
                   </div>
                 </div>
@@ -1268,19 +1282,36 @@ export default function Products() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="edit-precio_venta">Precio de Venta (Bs.) *</Label>
+                    <Label htmlFor="edit-precio_por_unidad">Precio por Unidad (Bs.) *</Label>
                     <Input
-                      id="edit-precio_venta"
+                      id="edit-precio_por_unidad"
                       type="number"
                       step="0.01"
-                      {...updateForm.register('precio_venta', { valueAsNumber: true })}
+                      {...updateForm.register('precio_por_unidad', { valueAsNumber: true })}
                     />
-                    {updateForm.formState.errors.precio_venta && (
+                    {updateForm.formState.errors.precio_por_unidad && (
                       <p className="text-sm text-destructive">
-                        {updateForm.formState.errors.precio_venta?.message}
+                        {updateForm.formState.errors.precio_por_unidad?.message}
                       </p>
                     )}
                   </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-precio_por_mayor">Precio por Mayor (Bs.)</Label>
+                    <Input
+                      id="edit-precio_por_mayor"
+                      type="number"
+                      step="0.01"
+                      {...updateForm.register('precio_por_mayor', { valueAsNumber: true })}
+                      placeholder="0.00"
+                    />
+                    {updateForm.formState.errors.precio_por_mayor && (
+                      <p className="text-sm text-destructive">
+                        {updateForm.formState.errors.precio_por_mayor?.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label htmlFor="edit-id_categoria">Categoría</Label>
                     <Popover open={editCategoryOpen} onOpenChange={setEditCategoryOpen} modal={false}>
@@ -1460,7 +1491,7 @@ export default function Products() {
                       </div>
                     )}
                     <p className="text-xs text-muted-foreground">
-                      Formatos soportados: JPG, PNG, GIF. Tamaño máximo: 5MB
+                      Formatos soportados: JPG, PNG, GIF. Tamaño máximo: 1MB
                     </p>
                   </div>
                 </div>

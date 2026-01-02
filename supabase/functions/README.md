@@ -4,10 +4,17 @@ Este directorio contiene las Edge Functions necesarias para gestionar emails de 
 
 ## Funciones Disponibles
 
-### 1. `get-user-email`
+### 1. `create-user`
+Crea un nuevo usuario en el sistema. Solo los administradores activos pueden usarla.
+- Crea el usuario en Auth.users usando Admin API
+- Crea el registro en la tabla `usuarios`
+- Confirma el email automáticamente
+- Valida que el nombre de usuario no exista
+
+### 2. `get-user-email`
 Obtiene el email de un usuario específico. Solo los administradores pueden usarla.
 
-### 2. `update-user-email`
+### 3. `update-user-email`
 Actualiza el email de un usuario específico. Solo los administradores pueden usarla.
 
 ## Requisitos Previos
@@ -38,6 +45,9 @@ supabase functions deploy
 
 ### Opción 2: Desplegar funciones individuales
 ```bash
+# Desplegar create-user
+supabase functions deploy create-user
+
 # Desplegar get-user-email
 supabase functions deploy get-user-email
 
@@ -52,6 +62,12 @@ Después de desplegar, puedes verificar que las funciones estén disponibles en:
 
 O probarlas directamente:
 ```bash
+# Probar create-user
+curl -X POST https://[project-ref].supabase.co/functions/v1/create-user \
+  -H "Authorization: Bearer [tu-token]" \
+  -H "Content-Type: application/json" \
+  -d '{"nombre": "Juan Pérez", "usuario": "juan", "email": "juan@example.com", "password": "password123", "rol": "vendedor", "estado": "activo"}'
+
 # Probar get-user-email
 curl -X POST https://[project-ref].supabase.co/functions/v1/get-user-email \
   -H "Authorization: Bearer [tu-token]" \
