@@ -15,6 +15,7 @@ serve(async (req) => {
   try {
     // Obtener el token de autorización
     const authHeader = req.headers.get('Authorization')
+    
     if (!authHeader) {
       return new Response(
         JSON.stringify({ error: 'No authorization header' }),
@@ -32,9 +33,10 @@ serve(async (req) => {
         },
       }
     )
-
+    
     // Verificar que el usuario esté autenticado
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
+    
     if (userError || !user) {
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
@@ -49,7 +51,7 @@ serve(async (req) => {
       .eq('id', user.id)
       .single()
 
-    if (roleError || userData?.rol !== 'admin' || userData?.estado !== 'activo') {
+    if (roleError || !userData || userData.rol !== 'admin' || userData.estado !== 'activo') {
       return new Response(
         JSON.stringify({ error: 'Solo los administradores activos pueden crear usuarios' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -115,6 +117,15 @@ serve(async (req) => {
     }
 
     // Crear registro en tabla usuarios
+    console.log('Intentando insertar en tabla usuarios:', {
+      id: authUser.user.id,
+      nombre,
+      usuario,
+      rol,
+      estado: estado || 'activo',
+      fecha_creacion: fecha_creacion || new Date().toISOString(),
+    });
+
     const { data: dbUser, error: dbError } = await supabaseAdmin
       .from('usuarios')
       .insert({
@@ -129,10 +140,22 @@ serve(async (req) => {
       .single()
 
     if (dbError || !dbUser) {
+      console.error('Error al insertar en tabla usuarios:', {
+        error: dbError,
+        code: dbError?.code,
+        message: dbError?.message,
+        details: dbError?.details,
+        hint: dbError?.hint,
+      });
       // Si falla la inserción en la tabla, eliminar el usuario de Auth
       await supabaseAdmin.auth.admin.deleteUser(authUser.user.id)
       return new Response(
-        JSON.stringify({ error: dbError?.message || 'Error al crear usuario en la base de datos' }),
+        JSON.stringify({ 
+          error: dbError?.message || 'Error al crear usuario en la base de datos',
+          code: dbError?.code,
+          details: dbError?.details,
+          hint: dbError?.hint,
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }

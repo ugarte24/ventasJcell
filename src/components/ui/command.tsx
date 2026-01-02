@@ -63,13 +63,66 @@ CommandInput.displayName = CommandPrimitive.Input.displayName;
 const CommandList = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.List>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.List>
->(({ className, ...props }, ref) => (
-  <CommandPrimitive.List
-    ref={ref}
-    className={cn("max-h-[300px] overflow-y-auto overflow-x-hidden", className)}
-    {...props}
-  />
-));
+>(({ className, style, onWheel, ...props }, ref) => {
+  const listRef = React.useRef<HTMLDivElement>(null);
+  React.useImperativeHandle(ref, () => listRef.current as any);
+
+  const handleWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    if (listRef.current) {
+      const element = listRef.current;
+      const { scrollTop, scrollHeight, clientHeight } = element;
+      const isAtTop = scrollTop <= 0;
+      const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
+      
+      // Si hay espacio para hacer scroll, permitirlo y detener propagación
+      if ((e.deltaY < 0 && !isAtTop) || (e.deltaY > 0 && !isAtBottom)) {
+        // Permitir scroll normal
+        e.stopPropagation();
+      } else if (!isAtTop && !isAtBottom) {
+        // Si hay espacio en cualquier dirección, permitir scroll
+        e.stopPropagation();
+      }
+    }
+    onWheel?.(e);
+  }, [onWheel]);
+
+  // Agregar listener para eventos de puntero (touchpad)
+  React.useEffect(() => {
+    const element = listRef.current;
+    if (!element) return;
+
+    const handlePointerWheel = (e: WheelEvent) => {
+      const { scrollTop, scrollHeight, clientHeight } = element;
+      const isAtTop = scrollTop <= 0;
+      const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
+      
+      if ((e.deltaY < 0 && !isAtTop) || (e.deltaY > 0 && !isAtBottom)) {
+        e.stopPropagation();
+      }
+    };
+
+    element.addEventListener('wheel', handlePointerWheel, { passive: false });
+    return () => {
+      element.removeEventListener('wheel', handlePointerWheel);
+    };
+  }, []);
+
+  return (
+    <CommandPrimitive.List
+      ref={listRef}
+      className={cn(
+        "max-h-[300px] overflow-auto overflow-x-hidden",
+        "[&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border",
+        className
+      )}
+      style={{ 
+        ...style
+      }}
+      onWheel={handleWheel}
+      {...props}
+    />
+  );
+});
 
 CommandList.displayName = CommandPrimitive.List.displayName;
 

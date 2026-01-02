@@ -99,7 +99,7 @@ La integración de Supabase con VentaPlus ha sido completada en su mayoría. Aqu
 
 ## Políticas RLS
 
-- **Vendedores**: Solo pueden ver sus propias ventas
+- **Vendedores Tienda**: Solo pueden ver sus propias ventas
 - **Admins**: Acceso completo a todas las tablas
 - **Productos**: Lectura pública, escritura solo para admins
 - **Clientes**: Lectura/escritura para todos los autenticados

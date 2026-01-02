@@ -40,25 +40,34 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Plus, Trash2, Loader, Check, ChevronsUpDown, Search, X } from 'lucide-react';
+import { Plus, Trash2, Loader, Check, ChevronsUpDown } from 'lucide-react';
 import { useProducts } from '@/hooks/useProducts';
+import { useUsers } from '@/hooks/useUsers';
 import { preregistrosService } from '@/services/preregistros.service';
 import { PreregistroMinorista } from '@/types';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { getLocalDateISO } from '@/lib/utils';
 
 export default function PreregistrosMinorista() {
   const { data: products = [] } = useProducts();
+  const { data: users = [] } = useUsers();
   const [preregistros, setPreregistros] = useState<PreregistroMinorista[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedMinorista, setSelectedMinorista] = useState<string>('');
   const [selectedProduct, setSelectedProduct] = useState<string>('');
   const [cantidad, setCantidad] = useState<string>('1');
+  const [minoristaSearchOpen, setMinoristaSearchOpen] = useState(false);
+  const [minoristaSearchTerm, setMinoristaSearchTerm] = useState('');
   const [productSearchOpen, setProductSearchOpen] = useState(false);
   const [productSearchTerm, setProductSearchTerm] = useState('');
-  const [fecha, setFecha] = useState<string>(getLocalDateISO());
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+
+  const minoristas = users.filter(u => u.rol === 'minorista' && u.estado === 'activo');
+  const filteredMinoristas = minoristas.filter(m =>
+    m.nombre.toLowerCase().includes(minoristaSearchTerm.toLowerCase()) ||
+    m.usuario.toLowerCase().includes(minoristaSearchTerm.toLowerCase())
+  );
 
   const filteredProducts = products.filter(p =>
     p.nombre.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
@@ -68,7 +77,8 @@ export default function PreregistrosMinorista() {
   const loadPreregistros = async () => {
     try {
       setIsLoading(true);
-      const data = await preregistrosService.getPreregistrosMinorista(fecha);
+      // Si hay un minorista seleccionado, filtrar por él, sino cargar todos
+      const data = await preregistrosService.getPreregistrosMinorista(selectedMinorista || undefined);
       setPreregistros(data);
     } catch (error: any) {
       toast.error(error.message || 'Error al cargar preregistros');
@@ -79,9 +89,14 @@ export default function PreregistrosMinorista() {
 
   useEffect(() => {
     loadPreregistros();
-  }, [fecha]);
+  }, [selectedMinorista]);
 
   const handleCreate = async () => {
+    if (!selectedMinorista) {
+      toast.error('Selecciona un minorista');
+      return;
+    }
+
     if (!selectedProduct) {
       toast.error('Selecciona un producto');
       return;
@@ -95,14 +110,16 @@ export default function PreregistrosMinorista() {
 
     try {
       await preregistrosService.createPreregistroMinorista(
+        selectedMinorista,
         selectedProduct,
-        cantidadNum,
-        fecha
+        cantidadNum
       );
       toast.success('Preregistro creado exitosamente');
       setIsDialogOpen(false);
+      setSelectedMinorista('');
       setSelectedProduct('');
       setCantidad('1');
+      setMinoristaSearchTerm('');
       setProductSearchTerm('');
       loadPreregistros();
     } catch (error: any) {
@@ -129,16 +146,8 @@ export default function PreregistrosMinorista() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Preregistros del Día</CardTitle>
+              <CardTitle>Preregistros Minorista</CardTitle>
               <div className="flex items-center gap-2">
-                <Label htmlFor="fecha">Fecha:</Label>
-                <Input
-                  id="fecha"
-                  type="date"
-                  value={fecha}
-                  onChange={(e) => setFecha(e.target.value)}
-                  className="w-auto"
-                />
                 <Button onClick={() => setIsDialogOpen(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   Nuevo Preregistro
@@ -153,12 +162,13 @@ export default function PreregistrosMinorista() {
               </div>
             ) : preregistros.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                No hay preregistros para esta fecha
+                No hay preregistros registrados
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Minorista</TableHead>
                     <TableHead>Producto</TableHead>
                     <TableHead>Código</TableHead>
                     <TableHead className="text-right">Cantidad</TableHead>
@@ -168,6 +178,9 @@ export default function PreregistrosMinorista() {
                 <TableBody>
                   {preregistros.map((preregistro) => (
                     <TableRow key={preregistro.id}>
+                      <TableCell>
+                        {preregistro.minorista?.nombre || 'N/A'}
+                      </TableCell>
                       <TableCell>
                         {preregistro.producto?.nombre || 'N/A'}
                       </TableCell>
@@ -205,10 +218,65 @@ export default function PreregistrosMinorista() {
             <DialogHeader>
               <DialogTitle>Nuevo Preregistro Minorista</DialogTitle>
               <DialogDescription>
-                Registra un producto y cantidad para los minoristas del día {fecha}
+                Registra un producto y cantidad para un minorista específico. Este preregistro será reutilizable todos los días.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-4">
+            <div className="space-y-4 py-4 overflow-visible">
+              <div className="space-y-2">
+                <Label>Minorista *</Label>
+                <Popover open={minoristaSearchOpen} onOpenChange={setMinoristaSearchOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-between"
+                    >
+                      {selectedMinorista
+                        ? minoristas.find(m => m.id === selectedMinorista)?.nombre || 'Seleccionar minorista'
+                        : 'Seleccionar minorista'}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-[10002]" align="start">
+                    <Command>
+                      <CommandInput
+                        placeholder="Buscar minorista..."
+                        value={minoristaSearchTerm}
+                        onValueChange={setMinoristaSearchTerm}
+                      />
+                      <CommandList>
+                        <CommandEmpty>No se encontraron minoristas.</CommandEmpty>
+                        <CommandGroup>
+                          {filteredMinoristas.map((minorista) => (
+                            <CommandItem
+                              key={minorista.id}
+                              value={`${minorista.nombre} ${minorista.usuario} ${minorista.id}`}
+                              onSelect={(currentValue) => {
+                                const selected = filteredMinoristas.find(
+                                  m => m.id === minorista.id
+                                );
+                                if (selected) {
+                                  setSelectedMinorista(selected.id);
+                                  setMinoristaSearchOpen(false);
+                                  setMinoristaSearchTerm('');
+                                }
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  selectedMinorista === minorista.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {minorista.nombre}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
               <div className="space-y-2">
                 <Label>Producto *</Label>
                 <Popover open={productSearchOpen} onOpenChange={setProductSearchOpen}>
@@ -224,7 +292,7 @@ export default function PreregistrosMinorista() {
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-[10002]" align="start">
                     <Command>
                       <CommandInput
                         placeholder="Buscar producto..."
@@ -237,11 +305,16 @@ export default function PreregistrosMinorista() {
                           {filteredProducts.map((product) => (
                             <CommandItem
                               key={product.id}
-                              value={product.id}
-                              onSelect={() => {
-                                setSelectedProduct(product.id);
-                                setProductSearchOpen(false);
-                                setProductSearchTerm('');
+                              value={`${product.nombre} ${product.codigo} ${product.id}`}
+                              onSelect={(currentValue) => {
+                                const selected = filteredProducts.find(
+                                  p => p.id === product.id
+                                );
+                                if (selected) {
+                                  setSelectedProduct(selected.id);
+                                  setProductSearchOpen(false);
+                                  setProductSearchTerm('');
+                                }
                               }}
                             >
                               <Check
@@ -250,7 +323,7 @@ export default function PreregistrosMinorista() {
                                   selectedProduct === product.id ? "opacity-100" : "opacity-0"
                                 )}
                               />
-                              {product.nombre} ({product.codigo})
+                              {product.nombre}
                             </CommandItem>
                           ))}
                         </CommandGroup>

@@ -253,12 +253,56 @@ export default function Users() {
     let userEmail = user.email || '';
     
     try {
-      // Solo intentar obtener el email si es el usuario actual o si ya está en el objeto
       const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (currentUser && currentUser.id === user.id && currentUser.email) {
+      
+      if (!currentUser) {
+        updateForm.reset({
+          nombre: user.nombre,
+          usuario: user.usuario,
+          email: userEmail,
+          rol: user.rol,
+          estado: user.estado,
+        });
+        setIsEditDialogOpen(true);
+        return;
+      }
+
+      // Obtener rol del usuario actual
+      const { data: currentUserData } = await supabase
+        .from('usuarios')
+        .select('rol')
+        .eq('id', currentUser.id)
+        .single();
+
+      const isAdmin = currentUserData?.rol === 'admin';
+      const isOwnUser = currentUser.id === user.id;
+      
+      // Si es el usuario actual, usar su email directamente
+      if (isOwnUser && currentUser.email) {
         userEmail = currentUser.email;
-      } else {
-        // Intentar obtener con getById (solo funcionará para el usuario actual)
+      } 
+      // Si es administrador, usar la Edge Function para obtener el email de cualquier usuario
+      else if (isAdmin) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const { data: functionData, error: functionError } = await supabase.functions.invoke('get-user-email', {
+            body: {
+              userId: user.id,
+            },
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
+          });
+
+          if (!functionError && functionData?.email) {
+            userEmail = functionData.email;
+          } else {
+            console.warn('No se pudo obtener el email mediante Edge Function:', functionError);
+          }
+        }
+      }
+      // Si no es admin ni el usuario actual, intentar obtener con getById (solo funcionará para el usuario actual)
+      else {
         const userWithEmail = await usersService.getById(user.id);
         if (userWithEmail?.email) {
           userEmail = userWithEmail.email;
@@ -732,10 +776,16 @@ export default function Users() {
                     type="email"
                     {...updateForm.register('email')}
                     placeholder="usuario@example.com"
+                    disabled={currentUser?.rol !== 'admin' && selectedUser?.id !== currentUser?.id}
                   />
                   {updateForm.formState.errors.email && (
                     <p className="text-sm text-destructive">
                       {updateForm.formState.errors.email?.message}
+                    </p>
+                  )}
+                  {currentUser?.rol !== 'admin' && selectedUser?.id !== currentUser?.id && (
+                    <p className="text-xs text-muted-foreground">
+                      Solo los administradores pueden editar el email de otros usuarios
                     </p>
                   )}
                 </div>

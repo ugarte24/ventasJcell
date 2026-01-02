@@ -574,7 +574,7 @@ export default function SalesHistory() {
                   />
                 </div>
 
-                {/* Vendedor (solo admins) */}
+                {/* Vendedor Tienda (solo admins) */}
                 {user?.rol === 'admin' && (
                   <div className="space-y-2">
                     <Label htmlFor="vendedor">Vendedor Tienda</Label>

@@ -160,6 +160,16 @@ export const usersService = {
         throw new Error('Token de acceso no disponible. Por favor inicia sesión nuevamente.');
       }
 
+      // Logging para diagnóstico
+      console.log('🔍 Intentando crear usuario:', {
+        nombre: userData.nombre,
+        usuario: userData.usuario,
+        email: userData.email,
+        rol: userData.rol,
+        tieneToken: !!session.access_token,
+        tokenLength: session.access_token?.length,
+      });
+
       // Obtener fecha y hora local del cliente
       const fechaCreacion = getLocalDateTimeISO();
       

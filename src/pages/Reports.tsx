@@ -244,7 +244,7 @@ export default function Reports() {
     }));
   }, [stats.porMetodo]);
 
-  // Rendimiento de vendedores (solo admins)
+  // Rendimiento de vendedores tienda (solo admins)
   const vendedoresStats = useMemo(() => {
     if (!sales || user?.rol !== 'admin') return [];
 

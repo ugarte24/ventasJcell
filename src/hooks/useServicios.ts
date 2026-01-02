@@ -5,10 +5,11 @@ import { toast } from 'sonner';
 
 // ============ SERVICIOS ============
 
-export function useServicios(includeInactive = false) {
+export function useServicios(includeInactive = false, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['servicios', includeInactive],
     queryFn: () => serviciosService.getAllServicios(includeInactive),
+    enabled: options?.enabled !== false,
   });
 }
 

@@ -41,6 +41,7 @@ import { PreregistroMayorista } from '@/types';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { getLocalDateISO } from '@/lib/utils';
+import { DatePicker } from '@/components/ui/date-picker';
 
 export default function PreregistrosMayorista() {
   const { data: products = [] } = useProducts();
@@ -143,11 +144,11 @@ export default function PreregistrosMayorista() {
               <CardTitle>Preregistros del Día</CardTitle>
               <div className="flex items-center gap-2">
                 <Label htmlFor="fecha">Fecha:</Label>
-                <Input
+                <DatePicker
                   id="fecha"
-                  type="date"
                   value={fecha}
-                  onChange={(e) => setFecha(e.target.value)}
+                  onChange={setFecha}
+                  placeholder="dd/mm/yyyy"
                   className="w-auto"
                 />
                 <Button onClick={() => setIsDialogOpen(true)}>
@@ -220,10 +221,13 @@ export default function PreregistrosMayorista() {
             <DialogHeader>
               <DialogTitle>Nuevo Preregistro Mayorista</DialogTitle>
               <DialogDescription>
-                Registra un producto y cantidad para un mayorista específico del día {fecha}
+                Registra un producto y cantidad para un mayorista específico del día {fecha ? (() => {
+                  const [year, month, day] = fecha.split('-');
+                  return `${day}/${month}/${year}`;
+                })() : ''}
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-4">
+            <div className="space-y-4 py-4 overflow-visible">
               <div className="space-y-2">
                 <Label>Mayorista *</Label>
                 <Popover open={mayoristaSearchOpen} onOpenChange={setMayoristaSearchOpen}>
@@ -239,7 +243,7 @@ export default function PreregistrosMayorista() {
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-[10002]" align="start">
                     <Command>
                       <CommandInput
                         placeholder="Buscar mayorista..."
@@ -252,11 +256,16 @@ export default function PreregistrosMayorista() {
                           {filteredMayoristas.map((mayorista) => (
                             <CommandItem
                               key={mayorista.id}
-                              value={mayorista.id}
-                              onSelect={() => {
-                                setSelectedMayorista(mayorista.id);
-                                setMayoristaSearchOpen(false);
-                                setMayoristaSearchTerm('');
+                              value={`${mayorista.nombre} ${mayorista.usuario} ${mayorista.id}`}
+                              onSelect={(currentValue) => {
+                                const selected = filteredMayoristas.find(
+                                  m => m.id === mayorista.id
+                                );
+                                if (selected) {
+                                  setSelectedMayorista(selected.id);
+                                  setMayoristaSearchOpen(false);
+                                  setMayoristaSearchTerm('');
+                                }
                               }}
                             >
                               <Check
@@ -265,7 +274,7 @@ export default function PreregistrosMayorista() {
                                   selectedMayorista === mayorista.id ? "opacity-100" : "opacity-0"
                                 )}
                               />
-                              {mayorista.nombre} ({mayorista.usuario})
+                              {mayorista.nombre}
                             </CommandItem>
                           ))}
                         </CommandGroup>
@@ -289,7 +298,7 @@ export default function PreregistrosMayorista() {
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-[10002]" align="start">
                     <Command>
                       <CommandInput
                         placeholder="Buscar producto..."
@@ -302,11 +311,16 @@ export default function PreregistrosMayorista() {
                           {filteredProducts.map((product) => (
                             <CommandItem
                               key={product.id}
-                              value={product.id}
-                              onSelect={() => {
-                                setSelectedProduct(product.id);
-                                setProductSearchOpen(false);
-                                setProductSearchTerm('');
+                              value={`${product.nombre} ${product.codigo} ${product.id}`}
+                              onSelect={(currentValue) => {
+                                const selected = filteredProducts.find(
+                                  p => p.id === product.id
+                                );
+                                if (selected) {
+                                  setSelectedProduct(selected.id);
+                                  setProductSearchOpen(false);
+                                  setProductSearchTerm('');
+                                }
                               }}
                             >
                               <Check
@@ -315,7 +329,7 @@ export default function PreregistrosMayorista() {
                                   selectedProduct === product.id ? "opacity-100" : "opacity-0"
                                 )}
                               />
-                              {product.nombre} ({product.codigo})
+                              {product.nombre}
                             </CommandItem>
                           ))}
                         </CommandGroup>

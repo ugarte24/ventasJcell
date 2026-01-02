@@ -10,46 +10,51 @@ export const preregistrosService = {
   // PREREGISTROS MINORISTA
   // ============================================================================
 
-  async getPreregistrosMinorista(fecha?: string): Promise<PreregistroMinorista[]> {
-    const fechaBusqueda = fecha || getLocalDateISO();
-    
-    const { data, error } = await supabase
+  async getPreregistrosMinorista(idMinorista?: string): Promise<PreregistroMinorista[]> {
+    let query = supabase
       .from('preregistros_minorista')
-      .select('*')
-      .eq('fecha', fechaBusqueda)
-      .order('created_at', { ascending: false });
+      .select('*');
+
+    if (idMinorista) {
+      query = query.eq('id_minorista', idMinorista);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) throw new Error(handleSupabaseError(error));
 
-    // Cargar datos de productos
-    const preregistrosConProductos = await Promise.all(
+    // Cargar datos de productos y minoristas
+    const preregistrosCompletos = await Promise.all(
       (data || []).map(async (preregistro) => {
-        const producto = await productsService.getById(preregistro.id_producto);
+        const [producto, minorista] = await Promise.all([
+          productsService.getById(preregistro.id_producto),
+          preregistro.id_minorista ? usersService.getById(preregistro.id_minorista) : null,
+        ]);
         return {
           ...preregistro,
           producto: producto || undefined,
+          minorista: minorista || undefined,
         } as PreregistroMinorista;
       })
     );
 
-    return preregistrosConProductos;
+    return preregistrosCompletos;
   },
 
   async createPreregistroMinorista(
+    idMinorista: string,
     idProducto: string,
-    cantidad: number,
-    fecha?: string
+    cantidad: number
   ): Promise<PreregistroMinorista> {
-    const fechaRegistro = fecha || getLocalDateISO();
     const createdAt = getLocalDateTimeISO();
     const updatedAt = getLocalDateTimeISO();
 
-    // Verificar si ya existe un preregistro para este producto en esta fecha
+    // Verificar si ya existe un preregistro para este minorista y producto
     const { data: existing } = await supabase
       .from('preregistros_minorista')
       .select('id')
+      .eq('id_minorista', idMinorista)
       .eq('id_producto', idProducto)
-      .eq('fecha', fechaRegistro)
       .maybeSingle();
 
     if (existing) {
@@ -66,10 +71,15 @@ export const preregistrosService = {
 
       if (error) throw new Error(handleSupabaseError(error));
       
-      const producto = await productsService.getById(idProducto);
+      const [producto, minorista] = await Promise.all([
+        productsService.getById(idProducto),
+        usersService.getById(idMinorista),
+      ]);
+      
       return {
         ...data,
         producto: producto || undefined,
+        minorista: minorista || undefined,
       } as PreregistroMinorista;
     }
 
@@ -77,9 +87,9 @@ export const preregistrosService = {
     const { data, error } = await supabase
       .from('preregistros_minorista')
       .insert({
+        id_minorista: idMinorista,
         id_producto: idProducto,
         cantidad,
-        fecha: fechaRegistro,
         created_at: createdAt,
         updated_at: updatedAt,
       })
@@ -88,10 +98,15 @@ export const preregistrosService = {
 
     if (error) throw new Error(handleSupabaseError(error));
 
-    const producto = await productsService.getById(idProducto);
+    const [producto, minorista] = await Promise.all([
+      productsService.getById(idProducto),
+      usersService.getById(idMinorista),
+    ]);
+
     return {
       ...data,
       producto: producto || undefined,
+      minorista: minorista || undefined,
     } as PreregistroMinorista;
   },
 

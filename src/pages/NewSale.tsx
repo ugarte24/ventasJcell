@@ -136,10 +136,10 @@ export default function NewSale() {
 
       try {
         setIsLoadingPreregistros(true);
-        const fecha = getLocalDateISO();
         
         if (user.rol === 'minorista') {
-          const preregistros = await preregistrosService.getPreregistrosMinorista(fecha);
+          // Cargar preregistros del minorista actual (sin filtrar por fecha, son reutilizables)
+          const preregistros = await preregistrosService.getPreregistrosMinorista(user.id);
           const items: PreregistroVentaItem[] = preregistros.map(p => ({
             id: p.id,
             nombre: p.producto?.nombre || 'N/A',

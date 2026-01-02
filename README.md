@@ -9,7 +9,7 @@ Sistema de gestión de ventas e inventario diseñado para reemplazar el registro
 - **Gestión de Servicios**: Control de servicios (Recarga, Agente BCP, etc.) con registro de saldos y transacciones
 - **Gestión de Productos**: Control de inventario con alertas de stock bajo
 - **Dashboard Administrativo**: Estadísticas y métricas en tiempo real
-- **Gestión de Usuarios**: Sistema de roles (Administrador/Vendedor) con permisos diferenciados
+- **Gestión de Usuarios**: Sistema de roles (Administrador/Vendedor Tienda) con permisos diferenciados
 - **Historial de Ventas**: Registro completo de todas las transacciones
 - **Reportes Profesionales**: Análisis de ventas y productos más vendidos con exportación a PDF/Excel con diseño profesional
 - **Impresión de Tickets**: Sistema completo de impresión de tickets y comprobantes de pago
@@ -196,7 +196,7 @@ ventacontrol-pro/
 - Gestionar ventas a crédito
 - Eximir intereses de ventas a crédito
 
-### Vendedor
+### Vendedor Tienda
 - Registrar ventas (efectivo, QR, transferencia, crédito)
 - Registrar ventas a crédito con cliente
 - Ver historial de sus ventas
@@ -316,6 +316,8 @@ ventacontrol-pro/
   - ✅ Corrección de mensajes duplicados en la edición de movimientos
 
 - ✅ **Mejoras en v2.16.0:**
+  - ✅ Corrección del scroll táctil en formularios de preregistros (minorista y mayorista)
+  - ✅ Mejoras en la interacción con dropdowns dentro de diálogos
   - **Cambio de roles**: Actualización de roles de usuario - "Vendedor" ahora se muestra como "Vendedor Tienda" en la interfaz, mientras que el valor interno en la base de datos se mantiene como 'vendedor'
   - **Nuevos roles**: Agregados roles 'minorista' y 'mayorista' para gestionar diferentes tipos de clientes
   - **Campos de precio en productos**: 

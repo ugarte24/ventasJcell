@@ -20,7 +20,11 @@ export default function Dashboard() {
   const { data: salesToday = [], isLoading: loadingSales } = useTodaySales();
   const { data: allSales = [] } = useSales(); // Para mostrar últimas ventas si no hay ventas hoy
   const { data: productosStockBajo = [], isLoading: loadingStock } = useLowStockProducts();
-  const { data: servicios = [], isLoading: loadingServicios } = useServicios();
+  // Solo cargar servicios si el usuario no es minorista ni mayorista
+  const shouldLoadServicios = user?.rol !== 'minorista' && user?.rol !== 'mayorista';
+  const { data: servicios = [], isLoading: loadingServicios } = useServicios(false, {
+    enabled: shouldLoadServicios,
+  });
   const { requestPermission, hasPermission, isSupported, isEnabled, enable, disable } = useNotifications();
   const [notificationEnabled, setNotificationEnabled] = useState(false);
 
@@ -302,8 +306,8 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Servicios */}
-        {servicios && servicios.length > 0 && (
+        {/* Servicios - Solo visible para admin y vendedor */}
+        {servicios && servicios.length > 0 && user?.rol !== 'minorista' && user?.rol !== 'mayorista' && (
           <Card className="animate-fade-in">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2 font-display text-lg">

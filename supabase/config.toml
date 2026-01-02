@@ -24,3 +24,12 @@ api_url = "http://localhost:54321"
 [functions]
 # Configuracion para Edge Functions
 # verify_jwt se configura por funcion individual, no globalmente
+
+[functions.create-user]
+verify_jwt = false
+
+[functions.get-user-email]
+verify_jwt = false
+
+[functions.update-user-email]
+verify_jwt = false

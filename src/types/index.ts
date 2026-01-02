@@ -90,13 +90,14 @@ export interface SaleDetail {
 
 export interface PreregistroMinorista {
   id: string;
+  id_minorista: string;
   id_producto: string;
   cantidad: number;
-  fecha: string;
   created_at: string;
   updated_at: string;
   // Datos relacionados
   producto?: Product;
+  minorista?: User;
 }
 
 export interface PreregistroMayorista {

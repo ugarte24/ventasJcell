@@ -11,7 +11,7 @@ En el negocio no existe un control digital de inventarios, clientes ni ventas. L
 
 ## 2. Usuarios
 
-### 👤 Usuario Principal: Vendedor
+### 👤 Usuario Principal: Vendedor Tienda
 
 **Situación actual:**
 - Registra todas las ventas en un cuaderno de forma manual
@@ -43,7 +43,7 @@ En el negocio no existe un control digital de inventarios, clientes ni ventas. L
 
 ## 3. Flujos de Usuario
 
-### Flujo del Vendedor
+### Flujo del Vendedor Tienda
 
 1. Abre la aplicación
 2. Inicia sesión con sus credenciales
@@ -261,11 +261,11 @@ En el negocio no existe un control digital de inventarios, clientes ni ventas. L
 ### 📈 REPORTES (AUTOGENERADOS)
 
 Los reportes se generan dinámicamente a partir de:
-- Ventas (por fecha, vendedor, producto)
+- Ventas (por fecha, vendedor tienda, producto)
 - Arqueos de caja
 - Movimientos de inventario
 - Productos más vendidos
-- Rendimiento de vendedores
+- Rendimiento de vendedores tienda
 - Análisis de métodos de pago
 
 ## 5. Roles & Permisos
@@ -317,7 +317,7 @@ Los reportes se generan dinámicamente a partir de:
 - Gestionar aumentos de saldo
 - Editar manualmente el monto aumentado en el registro diario
 
-### 🧾 VENDEDOR – Acceso Limitado
+### 🧾 VENDEDOR TIENDA – Acceso Limitado
 
 **Ventas:**
 - Registrar nuevas ventas (efectivo, QR, transferencia, crédito)
@@ -350,7 +350,7 @@ Los reportes se generan dinámicamente a partir de:
 - ❌ No ve reportes generales
 - ❌ No gestiona usuarios
 - ❌ No realiza arqueos de caja
-- ❌ No puede anular ventas de otros vendedores
+- ❌ No puede anular ventas de otros vendedores tienda
 - ❌ No puede eximir intereses de ventas a crédito
 
 ## 6. Panel de Administración (Dashboard)
@@ -387,7 +387,7 @@ Los reportes se generan dinámicamente a partir de:
 - Registrar compra (entrada de inventario)
 - Ver todas las ventas
 - Anular venta
-- Crear nuevo vendedor
+- Crear nuevo vendedor tienda
 - Cambiar rol de usuario
 - Ver reportes
 - Exportar datos
@@ -520,6 +520,8 @@ Los reportes se generan dinámicamente a partir de:
 - ✅ Corrección de mensajes duplicados: Eliminación de mensajes de éxito duplicados en la edición de movimientos
 
 **Cambios en v2.16.0:**
+- ✅ Corrección del scroll táctil en formularios de preregistros (minorista y mayorista): Se implementaron manejadores de eventos `onWheel` en los componentes `CommandList` y `PopoverContent` para permitir el scroll táctil en laptops dentro de diálogos
+- ✅ Mejoras en la interacción con dropdowns dentro de diálogos: Se ajustaron los z-index y las propiedades de overflow para permitir scroll correcto
 - **Cambio de roles**: Actualización de roles de usuario - "Vendedor" ahora se muestra como "Vendedor Tienda" en la interfaz, mientras que el valor interno en la base de datos se mantiene como 'vendedor'
 - **Nuevos roles**: Agregados roles 'minorista' y 'mayorista' para gestionar diferentes tipos de clientes
 - **Campos de precio en productos**: 
