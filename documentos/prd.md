@@ -519,6 +519,21 @@ Los reportes se generan dinámicamente a partir de:
 - ✅ Preservación de estado del sidebar: La posición de scroll y el estado de secciones abiertas/cerradas se mantienen al navegar entre páginas
 - ✅ Corrección de mensajes duplicados: Eliminación de mensajes de éxito duplicados en la edición de movimientos
 
+**Cambios en v2.18.0:**
+- ✅ **Historial de Ventas para minoristas y mayoristas**: 
+  - Agregado "Historial de Ventas" al menú lateral para roles minorista y mayorista
+  - Acceso completo al historial de ventas con filtrado automático (solo ven sus propias ventas)
+  - Filtros por rango de fechas (día, semana, mes, personalizado)
+  - Exportación de reportes a PDF y Excel
+  - Ver detalles completos de cada venta
+  - Selector de vendedor oculto para estos roles (solo visible para admin)
+- ✅ **Dashboard mejorado para minoristas y mayoristas**:
+  - Métricas de ventas agregadas: Ventas del Día (total en Bs.), Número de Ventas (transacciones hoy)
+  - Sección "Últimas Ventas" muestra las 5 ventas más recientes
+  - Acciones rápidas actualizadas: "Nueva Venta", "Historial de Ventas" y "Mis Pedidos"
+  - Métricas combinadas: pedidos y ventas en un solo dashboard
+  - Corrección de import faltante: agregado `cn` desde `@/lib/utils`
+
 **Cambios en v2.17.0:**
 - ✅ **Panel de Control para minoristas y mayoristas**: 
   - Agregado "Panel de Control" al menú lateral para roles minorista y mayorista

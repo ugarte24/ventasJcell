@@ -42,7 +42,7 @@ const menuSections = [
     label: 'Ventas',
     items: [
       { title: 'Nueva Venta', url: '/ventas/nueva', icon: ShoppingCart, roles: ['admin', 'vendedor', 'minorista', 'mayorista'] },
-      { title: 'Historial de Ventas', url: '/ventas', icon: Receipt, roles: ['admin', 'vendedor'] },
+      { title: 'Historial de Ventas', url: '/ventas', icon: Receipt, roles: ['admin', 'vendedor', 'minorista', 'mayorista'] },
       { title: 'Ventas a Crédito', url: '/creditos', icon: DollarSign, roles: ['admin', 'vendedor'] },
       { title: 'Escanear QR', url: '/escanear-qr', icon: QrCode, roles: ['minorista'] },
       { title: 'Mis Pedidos', url: '/pedidos', icon: Package, roles: ['minorista', 'mayorista'] },

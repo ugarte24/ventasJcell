@@ -113,8 +113,8 @@ export default function SalesHistory() {
     if (fechaDesde) f.fechaDesde = fechaDesde;
     if (fechaHasta) f.fechaHasta = fechaHasta;
     
-    // Si es vendedor, solo mostrar sus ventas
-    if (user?.rol === 'vendedor') {
+    // Si es vendedor, minorista o mayorista, solo mostrar sus ventas
+    if (user?.rol === 'vendedor' || user?.rol === 'minorista' || user?.rol === 'mayorista') {
       f.id_vendedor = user.id;
     } else if (idVendedor) {
       f.id_vendedor = idVendedor;

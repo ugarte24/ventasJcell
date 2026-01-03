@@ -1,7 +1,7 @@
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { StatCard } from '@/components/ui/stat-card';
 import { useAuth } from '@/contexts';
-import { DollarSign, ShoppingBag, TrendingUp, Package, Clock, AlertTriangle, Bell, BellOff, Wrench, Send, CheckCircle, ClipboardList, XCircle } from 'lucide-react';
+import { DollarSign, ShoppingBag, TrendingUp, Package, Clock, AlertTriangle, Bell, BellOff, Wrench, Send, CheckCircle, ClipboardList, XCircle, Receipt } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
 import { pedidosService } from '@/services/pedidos.service';
 import { preregistrosService } from '@/services/preregistros.service';
-import { getLocalDateISO } from '@/lib/utils';
+import { getLocalDateISO, cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -59,6 +59,18 @@ export default function Dashboard() {
     },
     enabled: !!user && isMinoristaMayorista,
   });
+
+  // Queries de ventas para minoristas/mayoristas
+  const fechaHoy = getLocalDateISO();
+  const { data: salesMinoristaMayorista = [], isLoading: loadingSalesMinoristaMayorista } = useSales(
+    isMinoristaMayorista ? { id_vendedor: user?.id } : undefined
+  );
+  
+  const { data: salesTodayMinoristaMayorista = [] } = useSales(
+    isMinoristaMayorista 
+      ? { id_vendedor: user?.id, fechaDesde: fechaHoy, fechaHasta: fechaHoy }
+      : undefined
+  );
 
   const { requestPermission, hasPermission, isSupported, isEnabled, enable, disable } = useNotifications();
   const [notificationEnabled, setNotificationEnabled] = useState(false);
@@ -115,6 +127,15 @@ export default function Dashboard() {
   const pedidosEntregados = pedidos.filter(p => p.estado === 'entregado').length;
   const totalPreregistros = preregistros.length;
   const totalProductosPreregistrados = preregistros.reduce((sum, p) => sum + (p.cantidad || 0), 0);
+  
+  // Métricas de ventas para minoristas/mayoristas
+  const totalVentasHoyMinoristaMayorista = salesTodayMinoristaMayorista.reduce((sum, sale) => sum + sale.total, 0);
+  const numeroVentasHoyMinoristaMayorista = salesTodayMinoristaMayorista.length;
+  const ticketPromedioMinoristaMayorista = numeroVentasHoyMinoristaMayorista > 0 
+    ? totalVentasHoyMinoristaMayorista / numeroVentasHoyMinoristaMayorista 
+    : 0;
+  const totalVentasMinoristaMayorista = salesMinoristaMayorista.reduce((sum, sale) => sum + sale.total, 0);
+  const numeroVentasTotalMinoristaMayorista = salesMinoristaMayorista.length;
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -160,10 +181,10 @@ export default function Dashboard() {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        <div className={cn("grid gap-3 sm:gap-4", isMinoristaMayorista ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4")}>
           {isMinoristaMayorista ? (
             // Métricas para minoristas/mayoristas
-            loadingPedidos || loadingPreregistros ? (
+            (loadingPedidos || loadingPreregistros || loadingSalesMinoristaMayorista) ? (
               <>
                 <Skeleton className="h-32" />
                 <Skeleton className="h-32" />
@@ -173,26 +194,24 @@ export default function Dashboard() {
             ) : (
               <>
                 <StatCard
-                  title="Total Pedidos"
-                  value={totalPedidos}
-                  subtitle="pedidos registrados"
-                  icon={Package}
+                  title="Ventas del Día"
+                  value={`Bs. ${totalVentasHoyMinoristaMayorista.toFixed(2)}`}
+                  icon={DollarSign}
                   variant="primary"
                   layout="horizontal-title"
                 />
                 <StatCard
-                  title="Pedidos Pendientes"
-                  value={pedidosPendientes}
-                  subtitle="esperando envío"
-                  icon={Clock}
-                  variant={pedidosPendientes > 0 ? 'warning' : 'default'}
+                  title="Número de Ventas"
+                  value={numeroVentasHoyMinoristaMayorista}
+                  subtitle="transacciones hoy"
+                  icon={ShoppingBag}
                   layout="horizontal-title"
                 />
                 <StatCard
-                  title="Pedidos Enviados"
-                  value={pedidosEnviados}
-                  subtitle="en proceso"
-                  icon={Send}
+                  title="Total Pedidos"
+                  value={totalPedidos}
+                  subtitle="pedidos registrados"
+                  icon={Package}
                   variant="primary"
                   layout="horizontal-title"
                 />
@@ -267,14 +286,24 @@ export default function Dashboard() {
                 Nueva Venta
               </Button>
               {isMinoristaMayorista ? (
-                <Button 
-                  variant="outline" 
-                  className="h-12 justify-start gap-3"
-                  onClick={() => navigate('/pedidos')}
-                >
-                  <Package className="h-5 w-5" />
-                  Mis Pedidos
-                </Button>
+                <>
+                  <Button 
+                    variant="outline" 
+                    className="h-12 justify-start gap-3"
+                    onClick={() => navigate('/ventas')}
+                  >
+                    <Receipt className="h-5 w-5" />
+                    Historial de Ventas
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    className="h-12 justify-start gap-3"
+                    onClick={() => navigate('/pedidos')}
+                  >
+                    <Package className="h-5 w-5" />
+                    Mis Pedidos
+                  </Button>
+                </>
               ) : (
                 user?.rol === 'admin' && (
                   <>
@@ -304,72 +333,65 @@ export default function Dashboard() {
           <Card className="lg:col-span-2 animate-fade-in">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="font-display text-lg">
-                {isMinoristaMayorista ? 'Últimos Pedidos' : 'Últimas Ventas'}
+                Últimas Ventas
               </CardTitle>
               <Button 
                 variant="ghost" 
                 size="sm" 
-                onClick={() => navigate(isMinoristaMayorista ? '/pedidos' : '/ventas')}
+                onClick={() => navigate('/ventas')}
               >
                 Ver todas
               </Button>
             </CardHeader>
             <CardContent>
               {isMinoristaMayorista ? (
-                // Mostrar últimos pedidos para minoristas/mayoristas
-                loadingPedidos ? (
+                // Mostrar últimas ventas para minoristas/mayoristas
+                loadingSalesMinoristaMayorista ? (
                   <div className="space-y-4">
                     {[1, 2, 3].map((i) => (
                       <Skeleton key={i} className="h-16 w-full" />
                     ))}
                   </div>
-                ) : pedidos.length === 0 ? (
+                ) : salesMinoristaMayorista.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8">
-                    No hay pedidos registrados
+                    No hay ventas registradas
                   </p>
                 ) : (
                   <div className="space-y-4">
-                    {pedidos.slice(0, 5).map((pedido) => {
-                      const totalUnidades = pedido.detalles?.reduce((sum, d) => sum + d.cantidad, 0) || 0;
-                      const getEstadoBadge = (estado: string) => {
-                        switch (estado) {
-                          case 'pendiente':
-                            return <Badge variant="outline" className="border-warning text-warning"><Clock className="h-3 w-3 mr-1" /> Pendiente</Badge>;
-                          case 'enviado':
-                            return <Badge variant="outline" className="border-primary text-primary"><Send className="h-3 w-3 mr-1" /> Enviado</Badge>;
-                          case 'entregado':
-                            return <Badge className="bg-success text-success-foreground"><CheckCircle className="h-3 w-3 mr-1" /> Entregado</Badge>;
-                          case 'cancelado':
-                            return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" /> Cancelado</Badge>;
-                          default:
-                            return <Badge variant="outline">{estado}</Badge>;
-                        }
-                      };
+                    {salesMinoristaMayorista.slice(0, 5).map((sale: any) => {
+                      const detalles = sale.detalle_venta || [];
+                      const primerDetalle = detalles[0];
+                      const producto = primerDetalle?.productos;
                       
                       return (
                         <div 
-                          key={pedido.id} 
+                          key={sale.id} 
                           className="flex items-center justify-between rounded-lg border bg-card p-4 transition-colors hover:bg-muted/50"
                         >
                           <div className="flex items-center gap-4">
                             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                              <Package className="h-5 w-5" />
+                              <ShoppingBag className="h-5 w-5" />
                             </div>
                             <div>
                               <p className="font-medium text-foreground">
-                                Pedido #{pedido.id.substring(0, 8)}
+                                {producto?.nombre || 'Producto no disponible'}
                               </p>
                               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <Clock className="h-3 w-3" />
-                                {format(new Date(pedido.fecha_pedido), 'dd/MM/yyyy', { locale: es })}
-                                <span className="ml-2">
-                                  {pedido.detalles?.length || 0} producto(s) • {totalUnidades} unidades
-                                </span>
+                                {sale.fecha} {sale.hora}
+                                {detalles.length > 1 && (
+                                  <span className="ml-1">
+                                    (+{detalles.length - 1} más)
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>
                           <div className="text-right">
-                            {getEstadoBadge(pedido.estado)}
+                            <p className="font-semibold text-foreground">Bs. {sale.total.toFixed(2)}</p>
+                            <Badge variant="outline" className="capitalize">
+                              {sale.metodo_pago}
+                            </Badge>
                           </div>
                         </div>
                       );
