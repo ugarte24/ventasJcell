@@ -113,14 +113,39 @@ export default function EscanearQR() {
   // Funciones para cámara
   const openCamera = async () => {
     try {
+      setIsCameraOpen(true);
+      // Delay para asegurar que el diálogo y el video estén montados
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' } // Cámara trasera en móviles
+        video: { 
+          facingMode: 'environment', // Cámara trasera en móviles
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        } 
       });
       setCameraStream(stream);
-      setIsCameraOpen(true);
+      
+      // Asegurar que el video esté listo después de asignar el stream
+      setTimeout(() => {
+        if (videoRef.current && stream) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch((error) => {
+            console.error('Error al reproducir video:', error);
+            toast.error('Error al iniciar la cámara. Intenta nuevamente.');
+          });
+        }
+      }, 100);
     } catch (error: any) {
       console.error('Error al acceder a la cámara:', error);
-      toast.error('No se pudo acceder a la cámara. Verifica los permisos.');
+      setIsCameraOpen(false);
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        toast.error('Permisos de cámara denegados. Por favor, permite el acceso a la cámara en la configuración del navegador.');
+      } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+        toast.error('No se encontró ninguna cámara en el dispositivo.');
+      } else {
+        toast.error('No se pudo acceder a la cámara. Verifica los permisos.');
+      }
     }
   };
 
@@ -133,17 +158,30 @@ export default function EscanearQR() {
     setSelectedImage(null);
   };
 
-  // Efecto para iniciar el video cuando se abre la cámara
+  // Efecto para actualizar el stream cuando cambie
   useEffect(() => {
-    if (isCameraOpen && videoRef.current && cameraStream) {
-      videoRef.current.srcObject = cameraStream;
-    }
-    return () => {
-      if (cameraStream) {
-        cameraStream.getTracks().forEach(track => track.stop());
+    const video = videoRef.current;
+    if (video && cameraStream && isCameraOpen) {
+      video.srcObject = cameraStream;
+      
+      // Asegurar que el video se reproduzca
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((error) => {
+          console.error('Error al reproducir video:', error);
+          toast.error('Error al iniciar la cámara. Verifica los permisos.');
+        });
       }
-    };
-  }, [isCameraOpen, cameraStream]);
+      
+      // Limpiar cuando el componente se desmonte o cambie el stream
+      return () => {
+        if (video.srcObject) {
+          const tracks = (video.srcObject as MediaStream).getTracks();
+          tracks.forEach(track => track.stop());
+        }
+      };
+    }
+  }, [cameraStream, isCameraOpen]);
 
   const capturePhoto = async () => {
     if (!videoRef.current) return;
@@ -413,17 +451,24 @@ export default function EscanearQR() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="relative bg-black rounded-lg overflow-hidden aspect-video">
-              {cameraStream && (
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  className="w-full h-full object-cover"
-                />
-              )}
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover"
+                onLoadedMetadata={() => {
+                  if (videoRef.current) {
+                    videoRef.current.play().catch((error) => {
+                      console.error('Error al reproducir después de cargar metadata:', error);
+                    });
+                  }
+                }}
+              />
               {!cameraStream && (
-                <div className="flex items-center justify-center h-full text-muted-foreground">
+                <div className="absolute inset-0 flex items-center justify-center bg-black text-muted-foreground">
                   <Loader className="h-8 w-8 animate-spin" />
+                  <span className="ml-2">Iniciando cámara...</span>
                 </div>
               )}
             </div>

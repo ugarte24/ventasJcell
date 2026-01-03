@@ -315,6 +315,14 @@ ventacontrol-pro/
   - ✅ Preservación de posición de scroll y estado de secciones en el sidebar
   - ✅ Corrección de mensajes duplicados en la edición de movimientos
 
+- ✅ **Mejoras en v2.19.1:**
+  - ✅ **Corrección de bug en escaneo de QR**:
+    - Corregido problema de pantalla negra al abrir la cámara
+    - Mejorado el manejo de inicialización del stream de video
+    - Agregado delay adecuado para asegurar que el diálogo esté montado
+    - Mejorado el evento onLoadedMetadata para reproducir video automáticamente
+    - Mejor feedback visual durante la carga de la cámara
+
 - ✅ **Mejoras en v2.19.0:**
   - ✅ **Escaneo de QR mejorado para minoristas**:
     - Opción para tomar foto con la cámara del dispositivo

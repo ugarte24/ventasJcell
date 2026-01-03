@@ -519,6 +519,16 @@ Los reportes se generan dinámicamente a partir de:
 - ✅ Preservación de estado del sidebar: La posición de scroll y el estado de secciones abiertas/cerradas se mantienen al navegar entre páginas
 - ✅ Corrección de mensajes duplicados: Eliminación de mensajes de éxito duplicados en la edición de movimientos
 
+**Cambios en v2.19.1:**
+- ✅ **Corrección de bug en escaneo de QR**: 
+  - Corregido problema de pantalla negra al abrir la cámara
+  - Eliminado callback ref innecesario, usando directamente videoRef
+  - Aumentado delay de inicialización de 100ms a 300ms para asegurar que el diálogo esté montado
+  - Agregada asignación adicional del stream al video después de obtenerlo
+  - Mejorado useEffect para manejo correcto de limpieza y reproducción del video
+  - Agregado evento onLoadedMetadata al video para reproducir automáticamente cuando esté listo
+  - Mejor feedback visual con mensaje "Iniciando cámara..." durante la carga
+
 **Cambios en v2.19.0:**
 - ✅ **Escaneo de QR mejorado para minoristas**: 
   - Opción para tomar foto con la cámara del dispositivo (botón "Tomar Foto")
