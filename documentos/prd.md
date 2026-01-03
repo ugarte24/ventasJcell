@@ -519,6 +519,20 @@ Los reportes se generan dinámicamente a partir de:
 - ✅ Preservación de estado del sidebar: La posición de scroll y el estado de secciones abiertas/cerradas se mantienen al navegar entre páginas
 - ✅ Corrección de mensajes duplicados: Eliminación de mensajes de éxito duplicados en la edición de movimientos
 
+**Cambios en v2.17.0:**
+- ✅ **Panel de Control para minoristas y mayoristas**: 
+  - Agregado "Panel de Control" al menú lateral para roles minorista y mayorista
+  - Icono de resumen (LayoutDashboard/ClipboardList) en lugar del icono de casa para estos roles
+  - Dashboard adaptado con métricas específicas: Total Pedidos, Pedidos Pendientes, Pedidos Enviados, Preregistros Activos
+  - Sección de "Últimos Pedidos" en lugar de "Últimas Ventas" para minoristas y mayoristas
+  - Acciones rápidas actualizadas: "Nueva Venta" y "Mis Pedidos" para estos roles
+  - Secciones no relevantes ocultas (Servicios, Alertas de Stock) para minoristas y mayoristas
+- ✅ **Mejoras en interfaz de ventas para minoristas y mayoristas**:
+  - Icono de resumen (ClipboardList) en botón flotante y títulos de carrito/resumen
+  - Título "Resumen" en lugar de "Carrito" en el Sheet móvil
+  - Mensajes adaptados: "No hay productos en tu resumen" y "Selecciona productos de tu preregistro para agregarlos"
+  - Icono de lista (ClipboardList) más grande cuando el resumen está vacío
+
 **Cambios en v2.16.0:**
 - ✅ Corrección del scroll táctil en formularios de preregistros (minorista y mayorista): Se implementaron manejadores de eventos `onWheel` en los componentes `CommandList` y `PopoverContent` para permitir el scroll táctil en laptops dentro de diálogos
 - ✅ Mejoras en la interacción con dropdowns dentro de diálogos: Se ajustaron los z-index y las propiedades de overflow para permitir scroll correcto

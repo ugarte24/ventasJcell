@@ -22,6 +22,10 @@ import ServiciosRegistro from "./pages/ServiciosRegistro";
 import ServiciosHistorial from "./pages/ServiciosHistorial";
 import PreregistrosMinorista from "./pages/PreregistrosMinorista";
 import PreregistrosMayorista from "./pages/PreregistrosMayorista";
+import ControlVentas from "./pages/ControlVentas";
+import EscanearQR from "./pages/EscanearQR";
+import Pedidos from "./pages/Pedidos";
+import AdminPedidos from "./pages/AdminPedidos";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -58,6 +62,11 @@ const App = () => (
               <Route path="/usuarios" element={<Users />} />
               <Route path="/preregistros/minorista" element={<PreregistrosMinorista />} />
               <Route path="/preregistros/mayorista" element={<PreregistrosMayorista />} />
+              <Route path="/control-ventas" element={<ControlVentas />} />
+              <Route path="/pagos-mayoristas" element={<Navigate to="/control-ventas" replace />} />
+              <Route path="/escanear-qr" element={<EscanearQR />} />
+              <Route path="/pedidos" element={<Pedidos />} />
+              <Route path="/admin/pedidos" element={<AdminPedidos />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

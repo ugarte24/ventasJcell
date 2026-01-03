@@ -6,8 +6,12 @@ import { useAuth } from '@/contexts';
 import { useProducts, useSearchProducts } from '@/hooks/useProducts';
 import { useCreateSale } from '@/hooks/useSales';
 import { useClients, useSearchClients } from '@/hooks/useClients';
-import { Sale, PreregistroVentaItem } from '@/types';
+import { useCategories } from '@/hooks/useCategories';
+import { Sale, PreregistroVentaItem, TransferenciaSaldo, SaldoRestanteMayorista } from '@/types';
 import { preregistrosService } from '@/services/preregistros.service';
+import { transferenciasService } from '@/services/transferencias.service';
+import { saldosRestantesMayoristasService } from '@/services/saldos-restantes-mayoristas.service';
+import { pagosMayoristasService } from '@/services/pagos-mayoristas.service';
 import { getLocalDateISO } from '@/lib/utils';
 import { printTicket } from '@/utils/print';
 import { salesService } from '@/services/sales.service';
@@ -42,7 +46,8 @@ import {
   Package,
   User,
   Edit,
-  X
+  X,
+  ClipboardList
 } from 'lucide-react';
 import {
   Command,
@@ -119,6 +124,7 @@ export default function NewSale() {
   const { data: searchResults = [], isLoading: searching } = useSearchProducts(searchTerm);
   const { data: allClients = [] } = useClients();
   const { data: clientSearchResults = [] } = useSearchClients(clientSearchTerm);
+  const { data: categories = [] } = useCategories();
   const createSaleMutation = useCreateSale();
 
   // Estados para preregistros (minorista/mayorista)
@@ -126,6 +132,15 @@ export default function NewSale() {
   const [isLoadingPreregistros, setIsLoadingPreregistros] = useState(false);
   const [editingCantidadRestante, setEditingCantidadRestante] = useState<string | null>(null);
   const [editCantidadRestanteValue, setEditCantidadRestanteValue] = useState<string>('');
+  
+  // Estados para mayoristas: arrastrar saldos restantes
+  const [showArrastrarSaldosDialog, setShowArrastrarSaldosDialog] = useState(false);
+  const [saldosParaArrastrar, setSaldosParaArrastrar] = useState<Array<{ id_producto: string; cantidad_restante: number; nombre: string }>>([]);
+  
+  // Estados para minoristas: generar QR
+  const [showQRDialog, setShowQRDialog] = useState(false);
+  const [qrCode, setQrCode] = useState<string>('');
+  const [transferenciaCreada, setTransferenciaCreada] = useState<TransferenciaSaldo | null>(null);
 
   // Cargar preregistros si es minorista o mayorista
   useEffect(() => {
@@ -145,13 +160,14 @@ export default function NewSale() {
             nombre: p.producto?.nombre || 'N/A',
             codigo: p.producto?.codigo,
             cantidad: p.cantidad,
-            aumento: 0,
-            cantidadRestante: p.cantidad,
+            aumento: p.aumento || 0, // Usar el aumento de la base de datos (de pedidos entregados)
+            cantidadRestante: p.cantidad, // Inicialmente igual a cantidad (saldo inicial)
             precio_unitario: p.producto?.precio_por_unidad || 0,
             subtotal: 0,
             id_producto: p.id_producto,
+            id_categoria: p.producto?.id_categoria, // Agregar categoría para el resumen
           }));
-          // Calcular subtotales iniciales
+          // Calcular subtotales iniciales (inicialmente 0 porque cantidadRestante = cantidad)
           items.forEach(item => {
             item.subtotal = (item.cantidad + item.aumento - item.cantidadRestante) * item.precio_unitario;
           });
@@ -163,13 +179,14 @@ export default function NewSale() {
             nombre: p.producto?.nombre || 'N/A',
             codigo: p.producto?.codigo,
             cantidad: p.cantidad,
-            aumento: 0,
-            cantidadRestante: p.cantidad,
+            aumento: p.aumento || 0, // Usar el aumento de la base de datos (de pedidos entregados)
+            cantidadRestante: p.cantidad, // Inicialmente igual a cantidad (saldo inicial)
             precio_unitario: p.producto?.precio_por_mayor ?? 0,
             subtotal: 0,
             id_producto: p.id_producto,
+            id_categoria: p.producto?.id_categoria, // Agregar categoría para el resumen
           }));
-          // Calcular subtotales iniciales
+          // Calcular subtotales iniciales (inicialmente 0 porque cantidadRestante = cantidad)
           items.forEach(item => {
             item.subtotal = (item.cantidad + item.aumento - item.cantidadRestante) * item.precio_unitario;
           });
@@ -214,6 +231,33 @@ export default function NewSale() {
   const preregistroTotal = useMemo(() => {
     return preregistroItems.reduce((sum, item) => sum + item.subtotal, 0);
   }, [preregistroItems]);
+
+  // Calcular resumen por categorías
+  const resumenPorCategoria = useMemo(() => {
+    const categoriasMap = new Map<string, { nombre: string; total: number }>();
+    
+    // Agregar categoría "Sin categoría" para productos sin categoría
+    categoriasMap.set('sin-categoria', { nombre: 'Sin categoría', total: 0 });
+    
+    preregistroItems.forEach(item => {
+      const categoriaId = item.id_categoria || 'sin-categoria';
+      const categoriaNombre = item.id_categoria 
+        ? categories.find(c => c.id === item.id_categoria)?.nombre || 'Sin categoría'
+        : 'Sin categoría';
+      
+      if (!categoriasMap.has(categoriaId)) {
+        categoriasMap.set(categoriaId, { nombre: categoriaNombre, total: 0 });
+      }
+      
+      const categoria = categoriasMap.get(categoriaId)!;
+      categoria.total += item.subtotal;
+    });
+    
+    // Convertir a array y filtrar categorías con total 0
+    return Array.from(categoriasMap.values())
+      .filter(cat => cat.total > 0)
+      .sort((a, b) => b.total - a.total); // Ordenar por total descendente
+  }, [preregistroItems, categories]);
 
   const filteredProducts = useMemo(() => {
     if (searchTerm.length > 0 && searchResults.length > 0) {
@@ -327,6 +371,54 @@ export default function NewSale() {
         })));
         setSaleItemCount(itemsConVenta.length);
         setCreatedSale(newSale);
+
+        // Si es mayorista: crear pago pendiente y preparar saldos para arrastrar
+        if (user.rol === 'mayorista') {
+          // Crear registro de pago pendiente
+          await pagosMayoristasService.create(
+            newSale.id,
+            user.id,
+            preregistroTotal,
+            selectedPayment
+          );
+
+          // Preparar saldos restantes para arrastrar
+          const saldosRestantes = preregistroItems
+            .filter(item => item.cantidadRestante > 0)
+            .map(item => ({
+              id_producto: item.id_producto,
+              cantidad_restante: item.cantidadRestante,
+              nombre: item.nombre,
+            }));
+          
+          setSaldosParaArrastrar(saldosRestantes);
+        }
+
+        // Si es minorista: preparar para generar QR (si hay saldos restantes)
+        if (user.rol === 'minorista') {
+          const saldosRestantes = preregistroItems
+            .filter(item => item.cantidadRestante > 0)
+            .map(item => ({
+              id_producto: item.id_producto,
+              cantidad_restante: item.cantidadRestante,
+            }));
+
+          if (saldosRestantes.length > 0) {
+            // Crear transferencia y generar QR
+            try {
+              const transferencia = await transferenciasService.create(
+                newSale.id,
+                user.id,
+                saldosRestantes
+              );
+              setTransferenciaCreada(transferencia);
+              setQrCode(transferencia.codigo_qr);
+            } catch (error: any) {
+              console.error('Error al crear transferencia:', error);
+              // Continuar sin QR si hay error
+            }
+          }
+        }
         
         // Limpiar preregistros procesados
         setPreregistroItems(prev => prev.map(item => {
@@ -355,7 +447,15 @@ export default function NewSale() {
         // Resetear método de pago a efectivo después de completar la venta
         setSelectedPayment('efectivo');
         
-        setShowSuccessDialog(true);
+        // Mostrar diálogo según el rol
+        if (user.rol === 'mayorista') {
+          setShowArrastrarSaldosDialog(true);
+        } else if (user.rol === 'minorista' && transferenciaCreada) {
+          setShowQRDialog(true);
+        } else {
+          setShowSuccessDialog(true);
+        }
+        
         toast.success('Venta registrada exitosamente');
         return;
       } catch (error: any) {
@@ -459,6 +559,8 @@ export default function NewSale() {
   const handleNewSale = () => {
     clearCart();
     setShowSuccessDialog(false);
+    setShowArrastrarSaldosDialog(false);
+    setShowQRDialog(false);
     setSaleTotal(0);
     setSaleItems([]);
     setSaleItemCount(0);
@@ -472,7 +574,40 @@ export default function NewSale() {
     setCuotaInicialHabilitada(false);
     setCuotaInicial(0);
     setCuotaInicialInput('');
+    setSaldosParaArrastrar([]);
+    setQrCode('');
+    setTransferenciaCreada(null);
     toast.success('¡Listo para una nueva venta!');
+  };
+
+  // Función para arrastrar saldos restantes (mayoristas)
+  const handleArrastrarSaldos = async () => {
+    if (!createdSale || !user || user.rol !== 'mayorista') return;
+
+    try {
+      const saldosData = saldosParaArrastrar.map(saldo => ({
+        id_producto: saldo.id_producto,
+        cantidad_restante: saldo.cantidad_restante,
+      }));
+
+      await saldosRestantesMayoristasService.create(
+        createdSale.id,
+        user.id,
+        saldosData
+      );
+
+      toast.success('Saldos restantes arrastrados exitosamente');
+      setShowArrastrarSaldosDialog(false);
+      setShowSuccessDialog(true);
+    } catch (error: any) {
+      toast.error(error.message || 'Error al arrastrar saldos restantes');
+    }
+  };
+
+  // Función para omitir arrastrar saldos (mayoristas)
+  const handleOmitirArrastrarSaldos = () => {
+    setShowArrastrarSaldosDialog(false);
+    setShowSuccessDialog(true);
   };
 
   // Resetear cuota inicial cuando cambia el método de pago
@@ -572,14 +707,18 @@ export default function NewSale() {
 
   return (
     <DashboardLayout title="Nueva Venta">
-      {/* Botón flotante del carrito - Tablet y móvil (cuando NO es desktop grande) */}
+      {/* Botón flotante del carrito/resumen - Tablet y móvil (cuando NO es desktop grande) */}
       {shouldShowSheet && (
         <Button
           onClick={() => setShowCartSheet(true)}
           className="fixed bottom-6 right-6 z-[100] h-14 w-14 rounded-full shadow-lg"
           size="icon"
         >
-          <ShoppingCart className="h-6 w-6" />
+          {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
+            <ClipboardList className="h-6 w-6" />
+          ) : (
+            <ShoppingCart className="h-6 w-6" />
+          )}
           {itemCount > 0 && (
             <Badge className="absolute -top-2 -right-2 h-6 w-6 flex items-center justify-center p-0 rounded-full">
               {itemCount}
@@ -615,9 +754,9 @@ export default function NewSale() {
                         <TableHeader>
                           <TableRow>
                             <TableHead>Nombre</TableHead>
-                            <TableHead className="text-right">Cantidad</TableHead>
+                            <TableHead className="text-right">Cantidad Inicial</TableHead>
                             <TableHead className="text-right">Aumento</TableHead>
-                            <TableHead className="text-right">Cantidad Restante</TableHead>
+                            <TableHead className="text-right">Saldo Restante</TableHead>
                             <TableHead className="text-right">Subtotal</TableHead>
                             <TableHead className="text-right">Acciones</TableHead>
                           </TableRow>
@@ -949,7 +1088,11 @@ export default function NewSale() {
           <Card>
             <CardHeader className="border-b">
               <CardTitle className="flex items-center gap-2 font-display">
-                <ShoppingCart className="h-5 w-5" />
+                {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
+                  <ClipboardList className="h-5 w-5" />
+                ) : (
+                  <ShoppingCart className="h-5 w-5" />
+                )}
                 {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? 'Resumen de Venta' : 'Carrito'}
                 {!user || (user.rol !== 'minorista' && user.rol !== 'mayorista') ? (
                   itemCount > 0 && (
@@ -997,21 +1140,51 @@ export default function NewSale() {
                         })}
                       </div>
                     </div>
-                    <div className="border-t p-3 sm:p-4">
-                      <div className="flex justify-between items-center mb-3">
-                        <p className="text-sm font-medium">Total:</p>
-                        <p className="text-xl font-bold text-primary">
-                          Bs. {preregistroTotal.toFixed(2)}
-                        </p>
+                    {/* Resumen por categorías */}
+                    {resumenPorCategoria.length > 0 && (
+                      <div className="border-t p-3 sm:p-4 space-y-2">
+                        <p className="text-sm font-semibold mb-3">Resumen por Categorías:</p>
+                        {resumenPorCategoria.map((categoria, index) => (
+                          <div key={index} className="flex justify-between items-center text-sm">
+                            <span className="text-muted-foreground">{categoria.nombre}:</span>
+                            <span className="font-medium">Bs. {categoria.total.toFixed(2)}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between items-center pt-2 mt-2 border-t">
+                          <p className="text-sm font-semibold">Total General:</p>
+                          <p className="text-xl font-bold text-primary">
+                            Bs. {preregistroTotal.toFixed(2)}
+                          </p>
+                        </div>
                       </div>
-                    </div>
+                    )}
+                    {resumenPorCategoria.length === 0 && (
+                      <div className="border-t p-3 sm:p-4">
+                        <div className="flex justify-between items-center">
+                          <p className="text-sm font-medium">Total:</p>
+                          <p className="text-xl font-bold text-primary">
+                            Bs. {preregistroTotal.toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </>
                 )
               ) : items.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <ShoppingCart className="h-12 w-12 text-muted-foreground/50" />
-                  <p className="mt-4 text-muted-foreground">El carrito está vacío</p>
-                  <p className="text-sm text-muted-foreground">Haz clic en un producto para agregarlo</p>
+                  {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
+                    <>
+                      <ClipboardList className="h-16 w-16 text-muted-foreground/50" />
+                      <p className="mt-4 text-muted-foreground">No hay productos en tu resumen</p>
+                      <p className="text-sm text-muted-foreground">Selecciona productos de tu preregistro para agregarlos</p>
+                    </>
+                  ) : (
+                    <>
+                      <ShoppingCart className="h-12 w-12 text-muted-foreground/50" />
+                      <p className="mt-4 text-muted-foreground">El carrito está vacío</p>
+                      <p className="text-sm text-muted-foreground">Haz clic en un producto para agregarlo</p>
+                    </>
+                  )}
                 </div>
               ) : (
                 <>
@@ -1390,22 +1563,38 @@ export default function NewSale() {
           <SheetContent side="bottom" className="h-[90vh] flex flex-col p-0">
             <SheetHeader className="px-4 pt-4 pb-2 border-b pr-12">
               <SheetTitle className="flex items-center gap-2 font-display">
-                <ShoppingCart className="h-5 w-5" />
-                <span>Carrito</span>
+                {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
+                  <ClipboardList className="h-5 w-5" />
+                ) : (
+                  <ShoppingCart className="h-5 w-5" />
+                )}
+                <span>{(user?.rol === 'minorista' || user?.rol === 'mayorista') ? 'Resumen' : 'Carrito'}</span>
                 {itemCount > 0 && (
                   <Badge className="ml-auto">{itemCount}</Badge>
                 )}
               </SheetTitle>
               <SheetDescription className="sr-only">
-                Gestiona los productos en tu carrito de venta
+                {(user?.rol === 'minorista' || user?.rol === 'mayorista') 
+                  ? 'Gestiona tu resumen de pedido' 
+                  : 'Gestiona los productos en tu carrito de venta'}
               </SheetDescription>
             </SheetHeader>
             <div className="flex-1 overflow-y-auto">
               {items.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-                  <ShoppingCart className="h-12 w-12 text-muted-foreground/50" />
-                  <p className="mt-4 text-muted-foreground">El carrito está vacío</p>
-                  <p className="text-sm text-muted-foreground">Haz clic en un producto para agregarlo</p>
+                  {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
+                    <>
+                      <ClipboardList className="h-16 w-16 text-muted-foreground/50" />
+                      <p className="mt-4 text-muted-foreground">No hay productos en tu resumen</p>
+                      <p className="text-sm text-muted-foreground">Selecciona productos de tu preregistro para agregarlos</p>
+                    </>
+                  ) : (
+                    <>
+                      <ShoppingCart className="h-12 w-12 text-muted-foreground/50" />
+                      <p className="mt-4 text-muted-foreground">El carrito está vacío</p>
+                      <p className="text-sm text-muted-foreground">Haz clic en un producto para agregarlo</p>
+                    </>
+                  )}
                 </div>
               ) : (
                 <>
@@ -1768,6 +1957,110 @@ export default function NewSale() {
           </SheetContent>
         </Sheet>
       )}
+
+      {/* Dialog para arrastrar saldos restantes (Mayoristas) */}
+      <Dialog open={showArrastrarSaldosDialog} onOpenChange={setShowArrastrarSaldosDialog}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">Arrastrar Saldos Restantes</DialogTitle>
+            <DialogDescription>
+              Registra los saldos restantes de productos que quedan después de tu jornada de trabajo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {saldosParaArrastrar.length === 0 ? (
+              <p className="text-center text-muted-foreground py-4">
+                No hay saldos restantes para arrastrar.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Productos con saldo restante:
+                </p>
+                <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                  {saldosParaArrastrar.map((saldo) => (
+                    <div
+                      key={saldo.id_producto}
+                      className="flex items-center justify-between p-3 border rounded-lg"
+                    >
+                      <div className="flex-1">
+                        <p className="font-medium">{saldo.nombre}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Cantidad restante: {saldo.cantidad_restante}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={handleOmitirArrastrarSaldos}
+            >
+              Omitir
+            </Button>
+            <Button
+              className="w-full sm:w-auto"
+              onClick={handleArrastrarSaldos}
+              disabled={saldosParaArrastrar.length === 0}
+            >
+              Arrastrar Saldos
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para generar QR (Minoristas) */}
+      <Dialog open={showQRDialog} onOpenChange={setShowQRDialog}>
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="text-center">
+            <DialogTitle className="font-display text-xl">Transferir Saldos Restantes</DialogTitle>
+            <DialogDescription>
+              Escanea este código QR para transferir tus saldos restantes a otro minorista.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {qrCode ? (
+              <div className="flex flex-col items-center space-y-4">
+                <div className="p-4 bg-white rounded-lg border-2 border-primary">
+                  <div className="text-center font-mono text-xs break-all p-2 bg-muted rounded">
+                    {qrCode}
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground text-center">
+                  Comparte este código con otro minorista para que pueda escanearlo y recibir tus saldos restantes.
+                </p>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    navigator.clipboard.writeText(qrCode);
+                    toast.success('Código QR copiado al portapapeles');
+                  }}
+                >
+                  Copiar Código
+                </Button>
+              </div>
+            ) : (
+              <p className="text-center text-muted-foreground py-4">
+                No se pudo generar el código QR.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button className="w-full" onClick={() => {
+              setShowQRDialog(false);
+              setShowSuccessDialog(true);
+            }}>
+              Continuar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Success Dialog */}
       <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>

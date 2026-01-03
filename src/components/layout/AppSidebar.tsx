@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Home, ShoppingCart, Package, BarChart3, Users, Settings, LogOut, Receipt, FolderTree, UserCircle, Wallet, ArrowLeftRight, DollarSign, Wrench, Calendar, History, Search, ChevronDown, ChevronRight, ClipboardList, Store } from 'lucide-react';
+import { Home, ShoppingCart, Package, BarChart3, Users, Settings, LogOut, Receipt, FolderTree, UserCircle, Wallet, ArrowLeftRight, DollarSign, Wrench, Calendar, History, Search, ChevronDown, ChevronRight, ClipboardList, Store, QrCode, LayoutDashboard } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/contexts';
 import {
@@ -35,7 +35,7 @@ const menuSections = [
   {
     label: 'Principal',
     items: [
-      { title: 'Panel de Control', url: '/dashboard', icon: Home, roles: ['admin', 'vendedor'] },
+      { title: 'Panel de Control', url: '/dashboard', icon: Home, roles: ['admin', 'vendedor', 'minorista', 'mayorista'] },
     ],
   },
   {
@@ -44,6 +44,8 @@ const menuSections = [
       { title: 'Nueva Venta', url: '/ventas/nueva', icon: ShoppingCart, roles: ['admin', 'vendedor', 'minorista', 'mayorista'] },
       { title: 'Historial de Ventas', url: '/ventas', icon: Receipt, roles: ['admin', 'vendedor'] },
       { title: 'Ventas a Crédito', url: '/creditos', icon: DollarSign, roles: ['admin', 'vendedor'] },
+      { title: 'Escanear QR', url: '/escanear-qr', icon: QrCode, roles: ['minorista'] },
+      { title: 'Mis Pedidos', url: '/pedidos', icon: Package, roles: ['minorista', 'mayorista'] },
     ],
   },
   {
@@ -54,6 +56,7 @@ const menuSections = [
       { title: 'Movimientos Inventario', url: '/inventario/movimientos', icon: ArrowLeftRight, roles: ['admin'] },
       { title: 'Preregistros Minorista', url: '/preregistros/minorista', icon: ClipboardList, roles: ['admin'] },
       { title: 'Preregistros Mayorista', url: '/preregistros/mayorista', icon: Store, roles: ['admin'] },
+      { title: 'Gestión de Pedidos', url: '/admin/pedidos', icon: Package, roles: ['admin'] },
     ],
   },
   {
@@ -69,6 +72,7 @@ const menuSections = [
     items: [
       { title: 'Clientes', url: '/clientes', icon: UserCircle, roles: ['admin', 'vendedor'] },
       { title: 'Arqueo de Caja', url: '/arqueo', icon: Wallet, roles: ['admin'] },
+      { title: 'Control Mayoristas y Minoristas', url: '/control-ventas', icon: Users, roles: ['admin'] },
       { title: 'Reportes', url: '/reportes', icon: BarChart3, roles: ['admin'] },
       { title: 'Usuarios', url: '/usuarios', icon: Users, roles: ['admin'] },
     ],
@@ -277,21 +281,29 @@ export function AppSidebar() {
                   <CollapsibleContent className="pt-0.5">
                     <SidebarGroupContent className="mt-0 pt-0 pb-0">
                       <SidebarMenu className="space-y-0.5">
-                        {section.items.map((item) => (
-                          <SidebarMenuItem key={item.title} className="mb-0">
-                            <SidebarMenuButton asChild tooltip={item.title} className="p-0 h-auto min-h-0">
-                            <NavLink
-                              to={item.url}
-                              end={['/ventas', '/servicios'].includes(item.url)}
-                                className="flex items-center gap-2 rounded px-2 py-1 pl-4 text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                                activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
-                              >
-                                <item.icon className="h-3.5 w-3.5 shrink-0" />
-                                {!collapsed && <span className="text-sm">{item.title}</span>}
-                              </NavLink>
-                            </SidebarMenuButton>
-                          </SidebarMenuItem>
-                        ))}
+                        {section.items.map((item) => {
+                          // Determinar el icono según el rol para Panel de Control
+                          let IconComponent = item.icon;
+                          if (item.title === 'Panel de Control' && user && (user.rol === 'minorista' || user.rol === 'mayorista')) {
+                            IconComponent = LayoutDashboard;
+                          }
+                          
+                          return (
+                            <SidebarMenuItem key={item.title} className="mb-0">
+                              <SidebarMenuButton asChild tooltip={item.title} className="p-0 h-auto min-h-0">
+                              <NavLink
+                                to={item.url}
+                                end={['/ventas', '/servicios'].includes(item.url)}
+                                  className="flex items-center gap-2 rounded px-2 py-1 pl-4 text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                                  activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                                >
+                                  <IconComponent className="h-3.5 w-3.5 shrink-0" />
+                                  {!collapsed && <span className="text-sm">{item.title}</span>}
+                                </NavLink>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                          );
+                        })}
                       </SidebarMenu>
                     </SidebarGroupContent>
                   </CollapsibleContent>

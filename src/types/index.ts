@@ -90,9 +90,11 @@ export interface SaleDetail {
 
 export interface PreregistroMinorista {
   id: string;
-  id_minorista: string;
+  id_minorista?: string;
   id_producto: string;
   cantidad: number;
+  aumento?: number; // Cantidad adicional recibida de pedidos
+  fecha?: string;
   created_at: string;
   updated_at: string;
   // Datos relacionados
@@ -105,6 +107,7 @@ export interface PreregistroMayorista {
   id_mayorista: string;
   id_producto: string;
   cantidad: number;
+  aumento?: number; // Cantidad adicional recibida de pedidos
   fecha: string;
   created_at: string;
   updated_at: string;
@@ -118,11 +121,92 @@ export interface PreregistroVentaItem {
   nombre: string;
   cantidad: number;
   aumento: number; // Campo para aumentar cantidad
-  cantidadRestante: number;
+  cantidadRestante: number; // Saldo que queda después de la jornada
   subtotal: number;
   precio_unitario: number;
   id_producto: string;
   codigo?: string;
+  id_categoria?: string; // Categoría del producto para agrupar en resumen
+}
+
+export interface Pedido {
+  id: string;
+  id_usuario: string;
+  tipo_usuario: 'minorista' | 'mayorista';
+  estado: 'pendiente' | 'enviado' | 'entregado' | 'cancelado';
+  fecha_pedido: string;
+  fecha_entrega?: string;
+  observaciones?: string;
+  created_at: string;
+  updated_at: string;
+  // Datos relacionados
+  usuario?: User;
+  detalles?: DetallePedido[];
+}
+
+export interface DetallePedido {
+  id: string;
+  id_pedido: string;
+  id_producto: string;
+  cantidad: number;
+  created_at: string;
+  updated_at: string;
+  // Datos relacionados
+  producto?: Product;
+}
+
+export interface TransferenciaSaldo {
+  id: string;
+  id_venta_origen: string;
+  id_minorista_origen: string;
+  id_minorista_destino: string;
+  codigo_qr: string;
+  saldos_transferidos: Array<{ id_producto: string; cantidad_restante: number }>;
+  fecha_transferencia: string;
+  fecha_escaneo?: string;
+  estado: 'pendiente' | 'completada' | 'expirada' | 'cancelada';
+  created_at: string;
+  updated_at: string;
+  // Datos relacionados
+  venta_origen?: Sale;
+  minorista_origen?: User;
+  minorista_destino?: User;
+}
+
+export interface PagoMayorista {
+  id: string;
+  id_venta: string;
+  id_mayorista: string;
+  monto_esperado: number;
+  monto_recibido: number;
+  diferencia: number;
+  metodo_pago: 'efectivo' | 'qr' | 'transferencia';
+  observaciones?: string;
+  id_administrador?: string;
+  fecha_pago: string;
+  fecha_verificacion?: string;
+  estado: 'pendiente' | 'verificado' | 'rechazado';
+  created_at: string;
+  updated_at: string;
+  // Datos relacionados
+  venta?: Sale;
+  mayorista?: User;
+  administrador?: User;
+}
+
+export interface SaldoRestanteMayorista {
+  id: string;
+  id_venta: string;
+  id_mayorista: string;
+  id_producto: string;
+  cantidad_restante: number;
+  fecha: string;
+  created_at: string;
+  updated_at: string;
+  // Datos relacionados
+  venta?: Sale;
+  mayorista?: User;
+  producto?: Product;
 }
 
 export interface CashRegister {

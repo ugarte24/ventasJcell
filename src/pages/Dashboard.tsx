@@ -1,7 +1,7 @@
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { StatCard } from '@/components/ui/stat-card';
 import { useAuth } from '@/contexts';
-import { DollarSign, ShoppingBag, TrendingUp, Package, Clock, AlertTriangle, Bell, BellOff, Wrench } from 'lucide-react';
+import { DollarSign, ShoppingBag, TrendingUp, Package, Clock, AlertTriangle, Bell, BellOff, Wrench, Send, CheckCircle, ClipboardList, XCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,18 +13,53 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
+import { pedidosService } from '@/services/pedidos.service';
+import { preregistrosService } from '@/services/preregistros.service';
+import { getLocalDateISO } from '@/lib/utils';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const isMinoristaMayorista = user?.rol === 'minorista' || user?.rol === 'mayorista';
+  
+  // Queries para admin/vendedor
   const { data: salesToday = [], isLoading: loadingSales } = useTodaySales();
   const { data: allSales = [] } = useSales(); // Para mostrar últimas ventas si no hay ventas hoy
   const { data: productosStockBajo = [], isLoading: loadingStock } = useLowStockProducts();
   // Solo cargar servicios si el usuario no es minorista ni mayorista
-  const shouldLoadServicios = user?.rol !== 'minorista' && user?.rol !== 'mayorista';
+  const shouldLoadServicios = !isMinoristaMayorista;
   const { data: servicios = [], isLoading: loadingServicios } = useServicios(false, {
     enabled: shouldLoadServicios,
   });
+  
+  // Queries para minoristas/mayoristas
+  const { data: pedidos = [], isLoading: loadingPedidos } = useQuery({
+    queryKey: ['pedidos', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      return await pedidosService.getAll(user.id);
+    },
+    enabled: !!user && isMinoristaMayorista,
+  });
+
+  const { data: preregistros = [], isLoading: loadingPreregistros } = useQuery({
+    queryKey: ['preregistros', user?.rol, user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      if (user.rol === 'minorista') {
+        return await preregistrosService.getPreregistrosMinorista(user.id);
+      } else if (user.rol === 'mayorista') {
+        const fecha = getLocalDateISO();
+        return await preregistrosService.getPreregistrosMayorista(user.id, fecha);
+      }
+      return [];
+    },
+    enabled: !!user && isMinoristaMayorista,
+  });
+
   const { requestPermission, hasPermission, isSupported, isEnabled, enable, disable } = useNotifications();
   const [notificationEnabled, setNotificationEnabled] = useState(false);
 
@@ -68,9 +103,18 @@ export default function Dashboard() {
     }
   };
 
+  // Métricas para admin/vendedor
   const totalVentasHoy = salesToday.reduce((sum, sale) => sum + sale.total, 0);
   const numeroVentas = salesToday.length;
   const ticketPromedio = numeroVentas > 0 ? totalVentasHoy / numeroVentas : 0;
+
+  // Métricas para minoristas/mayoristas
+  const totalPedidos = pedidos.length;
+  const pedidosPendientes = pedidos.filter(p => p.estado === 'pendiente').length;
+  const pedidosEnviados = pedidos.filter(p => p.estado === 'enviado').length;
+  const pedidosEntregados = pedidos.filter(p => p.estado === 'entregado').length;
+  const totalPreregistros = preregistros.length;
+  const totalProductosPreregistrados = preregistros.reduce((sum, p) => sum + (p.cantidad || 0), 0);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -117,45 +161,93 @@ export default function Dashboard() {
 
         {/* Stats Grid */}
         <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-          {loadingSales ? (
-            <>
-              <Skeleton className="h-32" />
-              <Skeleton className="h-32" />
-              <Skeleton className="h-32" />
-              <Skeleton className="h-32" />
-            </>
+          {isMinoristaMayorista ? (
+            // Métricas para minoristas/mayoristas
+            loadingPedidos || loadingPreregistros ? (
+              <>
+                <Skeleton className="h-32" />
+                <Skeleton className="h-32" />
+                <Skeleton className="h-32" />
+                <Skeleton className="h-32" />
+              </>
+            ) : (
+              <>
+                <StatCard
+                  title="Total Pedidos"
+                  value={totalPedidos}
+                  subtitle="pedidos registrados"
+                  icon={Package}
+                  variant="primary"
+                  layout="horizontal-title"
+                />
+                <StatCard
+                  title="Pedidos Pendientes"
+                  value={pedidosPendientes}
+                  subtitle="esperando envío"
+                  icon={Clock}
+                  variant={pedidosPendientes > 0 ? 'warning' : 'default'}
+                  layout="horizontal-title"
+                />
+                <StatCard
+                  title="Pedidos Enviados"
+                  value={pedidosEnviados}
+                  subtitle="en proceso"
+                  icon={Send}
+                  variant="primary"
+                  layout="horizontal-title"
+                />
+                <StatCard
+                  title="Preregistros Activos"
+                  value={totalPreregistros}
+                  subtitle={`${totalProductosPreregistrados} unidades`}
+                  icon={ClipboardList}
+                  variant="success"
+                  layout="horizontal-title"
+                />
+              </>
+            )
           ) : (
-            <>
-              <StatCard
-                title="Ventas del Día"
-                value={`Bs. ${totalVentasHoy.toFixed(2)}`}
-                icon={DollarSign}
-                variant="primary"
-                layout="horizontal-title"
-              />
-              <StatCard
-                title="Número de Ventas"
-                value={numeroVentas}
-                subtitle="transacciones hoy"
-                icon={ShoppingBag}
-                layout="horizontal-title"
-              />
-              <StatCard
-                title="Promedio de Ventas"
-                value={`Bs. ${ticketPromedio.toFixed(2)}`}
-                icon={TrendingUp}
-                variant="success"
-                layout="horizontal-title"
-              />
-              <StatCard
-                title="Stock Bajo"
-                value={loadingStock ? '...' : productosStockBajo.length}
-                subtitle="productos por reponer"
-                icon={Package}
-                variant={productosStockBajo.length > 0 ? 'warning' : 'default'}
-                layout="horizontal-title"
-              />
-            </>
+            // Métricas para admin/vendedor
+            loadingSales ? (
+              <>
+                <Skeleton className="h-32" />
+                <Skeleton className="h-32" />
+                <Skeleton className="h-32" />
+                <Skeleton className="h-32" />
+              </>
+            ) : (
+              <>
+                <StatCard
+                  title="Ventas del Día"
+                  value={`Bs. ${totalVentasHoy.toFixed(2)}`}
+                  icon={DollarSign}
+                  variant="primary"
+                  layout="horizontal-title"
+                />
+                <StatCard
+                  title="Número de Ventas"
+                  value={numeroVentas}
+                  subtitle="transacciones hoy"
+                  icon={ShoppingBag}
+                  layout="horizontal-title"
+                />
+                <StatCard
+                  title="Promedio de Ventas"
+                  value={`Bs. ${ticketPromedio.toFixed(2)}`}
+                  icon={TrendingUp}
+                  variant="success"
+                  layout="horizontal-title"
+                />
+                <StatCard
+                  title="Stock Bajo"
+                  value={loadingStock ? '...' : productosStockBajo.length}
+                  subtitle="productos por reponer"
+                  icon={Package}
+                  variant={productosStockBajo.length > 0 ? 'warning' : 'default'}
+                  layout="horizontal-title"
+                />
+              </>
+            )
           )}
         </div>
 
@@ -174,53 +266,175 @@ export default function Dashboard() {
                 <ShoppingBag className="h-5 w-5" />
                 Nueva Venta
               </Button>
-              {user?.rol === 'admin' && (
-                <>
-                  <Button 
-                    variant="outline" 
-                    className="h-12 justify-start gap-3"
-                    onClick={() => navigate('/productos')}
-                  >
-                    <Package className="h-5 w-5" />
-                    Ver Productos
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    className="h-12 justify-start gap-3"
-                    onClick={() => navigate('/reportes')}
-                  >
-                    <TrendingUp className="h-5 w-5" />
-                    Ver Reportes
-                  </Button>
-                </>
+              {isMinoristaMayorista ? (
+                <Button 
+                  variant="outline" 
+                  className="h-12 justify-start gap-3"
+                  onClick={() => navigate('/pedidos')}
+                >
+                  <Package className="h-5 w-5" />
+                  Mis Pedidos
+                </Button>
+              ) : (
+                user?.rol === 'admin' && (
+                  <>
+                    <Button 
+                      variant="outline" 
+                      className="h-12 justify-start gap-3"
+                      onClick={() => navigate('/productos')}
+                    >
+                      <Package className="h-5 w-5" />
+                      Ver Productos
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      className="h-12 justify-start gap-3"
+                      onClick={() => navigate('/reportes')}
+                    >
+                      <TrendingUp className="h-5 w-5" />
+                      Ver Reportes
+                    </Button>
+                  </>
+                )
               )}
             </CardContent>
           </Card>
 
-          {/* Recent Sales */}
+          {/* Recent Sales / Recent Orders */}
           <Card className="lg:col-span-2 animate-fade-in">
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="font-display text-lg">Últimas Ventas</CardTitle>
-              <Button variant="ghost" size="sm" onClick={() => navigate('/ventas')}>
+              <CardTitle className="font-display text-lg">
+                {isMinoristaMayorista ? 'Últimos Pedidos' : 'Últimas Ventas'}
+              </CardTitle>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => navigate(isMinoristaMayorista ? '/pedidos' : '/ventas')}
+              >
                 Ver todas
               </Button>
             </CardHeader>
             <CardContent>
-              {loadingSales ? (
-                <div className="space-y-4">
-                  {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-16 w-full" />
-                  ))}
-                </div>
-              ) : salesToday.length === 0 ? (
-                allSales.length === 0 ? (
+              {isMinoristaMayorista ? (
+                // Mostrar últimos pedidos para minoristas/mayoristas
+                loadingPedidos ? (
+                  <div className="space-y-4">
+                    {[1, 2, 3].map((i) => (
+                      <Skeleton key={i} className="h-16 w-full" />
+                    ))}
+                  </div>
+                ) : pedidos.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8">
-                    No hay ventas registradas
+                    No hay pedidos registrados
                   </p>
                 ) : (
                   <div className="space-y-4">
-                    <p className="text-sm text-muted-foreground mb-2">No hay ventas hoy. Mostrando últimas ventas:</p>
-                    {allSales.slice(0, 5).map((sale: any) => {
+                    {pedidos.slice(0, 5).map((pedido) => {
+                      const totalUnidades = pedido.detalles?.reduce((sum, d) => sum + d.cantidad, 0) || 0;
+                      const getEstadoBadge = (estado: string) => {
+                        switch (estado) {
+                          case 'pendiente':
+                            return <Badge variant="outline" className="border-warning text-warning"><Clock className="h-3 w-3 mr-1" /> Pendiente</Badge>;
+                          case 'enviado':
+                            return <Badge variant="outline" className="border-primary text-primary"><Send className="h-3 w-3 mr-1" /> Enviado</Badge>;
+                          case 'entregado':
+                            return <Badge className="bg-success text-success-foreground"><CheckCircle className="h-3 w-3 mr-1" /> Entregado</Badge>;
+                          case 'cancelado':
+                            return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" /> Cancelado</Badge>;
+                          default:
+                            return <Badge variant="outline">{estado}</Badge>;
+                        }
+                      };
+                      
+                      return (
+                        <div 
+                          key={pedido.id} 
+                          className="flex items-center justify-between rounded-lg border bg-card p-4 transition-colors hover:bg-muted/50"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                              <Package className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-foreground">
+                                Pedido #{pedido.id.substring(0, 8)}
+                              </p>
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Clock className="h-3 w-3" />
+                                {format(new Date(pedido.fecha_pedido), 'dd/MM/yyyy', { locale: es })}
+                                <span className="ml-2">
+                                  {pedido.detalles?.length || 0} producto(s) • {totalUnidades} unidades
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            {getEstadoBadge(pedido.estado)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              ) : (
+                // Mostrar últimas ventas para admin/vendedor
+                loadingSales ? (
+                  <div className="space-y-4">
+                    {[1, 2, 3].map((i) => (
+                      <Skeleton key={i} className="h-16 w-full" />
+                    ))}
+                  </div>
+                ) : salesToday.length === 0 ? (
+                  allSales.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8">
+                      No hay ventas registradas
+                    </p>
+                  ) : (
+                    <div className="space-y-4">
+                      <p className="text-sm text-muted-foreground mb-2">No hay ventas hoy. Mostrando últimas ventas:</p>
+                      {allSales.slice(0, 5).map((sale: any) => {
+                        const detalles = sale.detalle_venta || [];
+                        const primerDetalle = detalles[0];
+                        const producto = primerDetalle?.productos;
+                        
+                        return (
+                          <div 
+                            key={sale.id} 
+                            className="flex items-center justify-between rounded-lg border bg-card p-4 transition-colors hover:bg-muted/50"
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                                <ShoppingBag className="h-5 w-5" />
+                              </div>
+                              <div>
+                                <p className="font-medium text-foreground">
+                                  {producto?.nombre || 'Producto no disponible'}
+                                </p>
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                  <Clock className="h-3 w-3" />
+                                  {sale.fecha} {sale.hora}
+                                  {detalles.length > 1 && (
+                                    <span className="ml-1">
+                                      (+{detalles.length - 1} más)
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-semibold text-foreground">Bs. {sale.total.toFixed(2)}</p>
+                              <Badge variant="outline" className="capitalize">
+                                {sale.metodo_pago}
+                              </Badge>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
+                ) : (
+                  <div className="space-y-4">
+                    {salesToday.slice(0, 5).map((sale: any) => {
                       const detalles = sale.detalle_venta || [];
                       const primerDetalle = detalles[0];
                       const producto = primerDetalle?.productos;
@@ -260,47 +474,6 @@ export default function Dashboard() {
                     })}
                   </div>
                 )
-              ) : (
-                <div className="space-y-4">
-                  {salesToday.slice(0, 5).map((sale: any) => {
-                    const detalles = sale.detalle_venta || [];
-                    const primerDetalle = detalles[0];
-                    const producto = primerDetalle?.productos;
-                    
-                    return (
-                      <div 
-                        key={sale.id} 
-                        className="flex items-center justify-between rounded-lg border bg-card p-4 transition-colors hover:bg-muted/50"
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                            <ShoppingBag className="h-5 w-5" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-foreground">
-                              {producto?.nombre || 'Producto no disponible'}
-                            </p>
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Clock className="h-3 w-3" />
-                              {sale.fecha} {sale.hora}
-                              {detalles.length > 1 && (
-                                <span className="ml-1">
-                                  (+{detalles.length - 1} más)
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-semibold text-foreground">Bs. {sale.total.toFixed(2)}</p>
-                          <Badge variant="outline" className="capitalize">
-                            {sale.metodo_pago}
-                          </Badge>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
               )}
             </CardContent>
           </Card>
