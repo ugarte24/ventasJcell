@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,10 @@ import {
   XCircle, 
   Loader,
   Copy,
-  AlertCircle
+  AlertCircle,
+  Camera,
+  Image as ImageIcon,
+  X
 } from 'lucide-react';
 import { useAuth } from '@/contexts';
 import { toast } from 'sonner';
@@ -29,6 +32,7 @@ import { TransferenciaSaldo } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import jsQR from 'jsqr';
 
 export default function EscanearQR() {
   const { user } = useAuth();
@@ -37,6 +41,14 @@ export default function EscanearQR() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [transferenciaEncontrada, setTransferenciaEncontrada] = useState<TransferenciaSaldo | null>(null);
   const [isValidating, setIsValidating] = useState(false);
+  
+  // Estados para cámara y galería
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Solo minoristas pueden acceder
   if (user?.rol !== 'minorista') {
@@ -98,6 +110,130 @@ export default function EscanearQR() {
     }
   };
 
+  // Funciones para cámara
+  const openCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' } // Cámara trasera en móviles
+      });
+      setCameraStream(stream);
+      setIsCameraOpen(true);
+    } catch (error: any) {
+      console.error('Error al acceder a la cámara:', error);
+      toast.error('No se pudo acceder a la cámara. Verifica los permisos.');
+    }
+  };
+
+  const closeCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+    setIsCameraOpen(false);
+    setSelectedImage(null);
+  };
+
+  // Efecto para iniciar el video cuando se abre la cámara
+  useEffect(() => {
+    if (isCameraOpen && videoRef.current && cameraStream) {
+      videoRef.current.srcObject = cameraStream;
+    }
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [isCameraOpen, cameraStream]);
+
+  const capturePhoto = async () => {
+    if (!videoRef.current) return;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
+    const ctx = canvas.getContext('2d');
+    
+    if (ctx) {
+      ctx.drawImage(videoRef.current, 0, 0);
+      const imageData = canvas.toDataURL('image/jpeg');
+      setSelectedImage(imageData);
+      closeCamera();
+      // Procesar la imagen inmediatamente
+      await processImageForQR(imageData);
+    }
+  };
+
+  // Seleccionar imagen de galería
+  const handleSelectFromGallery = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImageSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Validar tipo de archivo
+      if (!file.type.startsWith('image/')) {
+        toast.error('Por favor selecciona un archivo de imagen');
+        return;
+      }
+
+      try {
+        const reader = new FileReader();
+        reader.onloadend = async (e) => {
+          const imageData = e.target?.result as string;
+          setSelectedImage(imageData);
+          await processImageForQR(imageData);
+        };
+        reader.readAsDataURL(file);
+      } catch (error: any) {
+        toast.error(error.message || 'Error al procesar la imagen');
+      }
+    }
+    // Limpiar el input para permitir seleccionar el mismo archivo nuevamente
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Procesar imagen para extraer código QR
+  const processImageForQR = async (imageData: string) => {
+    setIsProcessingImage(true);
+    try {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        
+        if (ctx) {
+          ctx.drawImage(img, 0, 0);
+          const imageDataFromCanvas = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          
+          // Usar jsQR para detectar el código QR
+          const code = jsQR(imageDataFromCanvas.data, imageDataFromCanvas.width, imageDataFromCanvas.height);
+          
+          if (code) {
+            setCodigoQR(code.data);
+            toast.success('Código QR detectado correctamente');
+            setSelectedImage(null);
+          } else {
+            toast.error('No se pudo detectar un código QR en la imagen. Intenta con otra imagen.');
+          }
+        }
+        setIsProcessingImage(false);
+      };
+      img.onerror = () => {
+        toast.error('Error al cargar la imagen');
+        setIsProcessingImage(false);
+      };
+      img.src = imageData;
+    } catch (error: any) {
+      toast.error(error.message || 'Error al procesar la imagen');
+      setIsProcessingImage(false);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6 animate-fade-in">
@@ -122,7 +258,13 @@ export default function EscanearQR() {
           <CardContent className="space-y-3">
             <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
               <li>Solicita el código QR al minorista que desea transferir sus saldos restantes</li>
-              <li>Ingresa o pega el código QR en el campo de abajo</li>
+              <li>Puedes escanear el código QR de tres formas:
+                <ul className="list-disc list-inside ml-4 mt-1 space-y-1">
+                  <li>Tomar una foto con la cámara</li>
+                  <li>Seleccionar una imagen desde la galería</li>
+                  <li>Ingresar o pegar el código manualmente</li>
+                </ul>
+              </li>
               <li>El sistema validará que el código corresponda a la última venta del minorista</li>
               <li>Una vez validado, recibirás los saldos restantes en tus preregistros</li>
             </ol>
@@ -147,26 +289,86 @@ export default function EscanearQR() {
                   value={codigoQR}
                   onChange={(e) => setCodigoQR(e.target.value.toUpperCase())}
                   className="font-mono text-sm"
-                  disabled={isValidating || escanearQRMutation.isPending}
+                  disabled={isValidating || escanearQRMutation.isPending || isProcessingImage}
                 />
                 <Button
                   variant="outline"
                   onClick={handlePegarCodigo}
-                  disabled={isValidating || escanearQRMutation.isPending}
+                  disabled={isValidating || escanearQRMutation.isPending || isProcessingImage}
                 >
                   <Copy className="h-4 w-4 mr-2" />
                   Pegar
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Ingresa o pega el código QR proporcionado por el minorista
+                Ingresa o pega el código QR, o escanéalo desde una foto
               </p>
             </div>
+
+            {/* Botones de cámara y galería */}
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant="outline"
+                onClick={openCamera}
+                disabled={isValidating || escanearQRMutation.isPending || isProcessingImage || isCameraOpen}
+                className="w-full"
+              >
+                <Camera className="h-4 w-4 mr-2" />
+                Tomar Foto
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleSelectFromGallery}
+                disabled={isValidating || escanearQRMutation.isPending || isProcessingImage || isCameraOpen}
+                className="w-full"
+              >
+                <ImageIcon className="h-4 w-4 mr-2" />
+                Desde Galería
+              </Button>
+            </div>
+
+            {/* Input oculto para seleccionar archivo */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageSelect}
+              className="hidden"
+            />
+
+            {/* Vista previa de imagen seleccionada */}
+            {selectedImage && !isCameraOpen && (
+              <div className="relative">
+                <img 
+                  src={selectedImage} 
+                  alt="Vista previa" 
+                  className="w-full rounded-lg border max-h-64 object-contain"
+                />
+                <Button
+                  variant="destructive"
+                  size="icon"
+                  className="absolute top-2 right-2"
+                  onClick={() => {
+                    setSelectedImage(null);
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = '';
+                    }
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+                {isProcessingImage && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-background/80 rounded-lg">
+                    <Loader className="h-8 w-8 animate-spin text-primary" />
+                  </div>
+                )}
+              </div>
+            )}
 
             <Button
               className="w-full"
               onClick={handleValidarQR}
-              disabled={!codigoQR.trim() || isValidating || escanearQRMutation.isPending}
+              disabled={!codigoQR.trim() || isValidating || escanearQRMutation.isPending || isProcessingImage}
             >
               {isValidating || escanearQRMutation.isPending ? (
                 <>
@@ -199,6 +401,52 @@ export default function EscanearQR() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Diálogo de Cámara */}
+      <Dialog open={isCameraOpen} onOpenChange={(open) => !open && closeCamera()}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Tomar Foto del Código QR</DialogTitle>
+            <DialogDescription>
+              Asegúrate de que el código QR esté bien enfocado y visible
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="relative bg-black rounded-lg overflow-hidden aspect-video">
+              {cameraStream && (
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  className="w-full h-full object-cover"
+                />
+              )}
+              {!cameraStream && (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  <Loader className="h-8 w-8 animate-spin" />
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={closeCamera}
+                className="flex-1"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={capturePhoto}
+                disabled={!cameraStream}
+                className="flex-1"
+              >
+                <Camera className="h-4 w-4 mr-2" />
+                Capturar Foto
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Confirmación Dialog */}
       <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>

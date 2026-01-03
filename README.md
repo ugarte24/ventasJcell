@@ -315,6 +315,16 @@ ventacontrol-pro/
   - ✅ Preservación de posición de scroll y estado de secciones en el sidebar
   - ✅ Corrección de mensajes duplicados en la edición de movimientos
 
+- ✅ **Mejoras en v2.19.0:**
+  - ✅ **Escaneo de QR mejorado para minoristas**:
+    - Opción para tomar foto con la cámara del dispositivo
+    - Opción para seleccionar imagen desde la galería
+    - Detección automática del código QR desde imágenes
+    - Vista previa de imagen antes de procesar
+    - Diálogo de cámara con vista previa en tiempo real
+    - Procesamiento automático: el código QR se extrae y valida automáticamente
+    - Instalación de librería jsQR para detección de códigos QR en imágenes
+
 - ✅ **Mejoras en v2.18.0:**
   - ✅ **Historial de Ventas para minoristas y mayoristas**:
     - Agregado "Historial de Ventas" al menú lateral para roles minorista y mayorista

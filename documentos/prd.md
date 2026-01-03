@@ -519,6 +519,18 @@ Los reportes se generan dinámicamente a partir de:
 - ✅ Preservación de estado del sidebar: La posición de scroll y el estado de secciones abiertas/cerradas se mantienen al navegar entre páginas
 - ✅ Corrección de mensajes duplicados: Eliminación de mensajes de éxito duplicados en la edición de movimientos
 
+**Cambios en v2.19.0:**
+- ✅ **Escaneo de QR mejorado para minoristas**: 
+  - Opción para tomar foto con la cámara del dispositivo (botón "Tomar Foto")
+  - Opción para seleccionar imagen desde la galería (botón "Desde Galería")
+  - Detección automática del código QR desde imágenes usando librería jsQR
+  - Vista previa de imagen seleccionada antes de procesar
+  - Diálogo de cámara con vista previa en tiempo real y botón de captura
+  - Procesamiento automático: el código QR se extrae y se valida automáticamente al capturar/seleccionar imagen
+  - Feedback visual con indicadores de carga durante el procesamiento
+  - Instrucciones actualizadas con las tres opciones de escaneo (foto, galería, manual)
+  - Instalación de dependencia jsQR para detección de códigos QR en imágenes
+
 **Cambios en v2.18.0:**
 - ✅ **Historial de Ventas para minoristas y mayoristas**: 
   - Agregado "Historial de Ventas" al menú lateral para roles minorista y mayorista
