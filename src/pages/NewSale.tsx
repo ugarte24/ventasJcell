@@ -749,118 +749,143 @@ export default function NewSale() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    <div className="rounded-lg border overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Nombre</TableHead>
-                            <TableHead className="text-right">Cantidad Inicial</TableHead>
-                            <TableHead className="text-right">Aumento</TableHead>
-                            <TableHead className="text-right">Saldo Restante</TableHead>
-                            <TableHead className="text-right">Subtotal</TableHead>
-                            <TableHead className="text-right">Acciones</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {preregistroItems.map((item) => (
-                            <TableRow key={item.id}>
-                              <TableCell>
-                                <div>
-                                  <p className="font-medium">{item.nombre}</p>
-                                  {item.codigo && (
-                                    <p className="text-sm text-muted-foreground">{item.codigo}</p>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {item.cantidad}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {item.aumento}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {editingCantidadRestante === item.id ? (
-                                  <div className="flex items-center gap-2 justify-end">
-                                    <Input
-                                      type="number"
-                                      min="0"
-                                      max={item.cantidad + item.aumento}
-                                      value={editCantidadRestanteValue}
-                                      onChange={(e) => setEditCantidadRestanteValue(e.target.value)}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                          const newValue = parseInt(editCantidadRestanteValue);
-                                          if (!isNaN(newValue)) {
-                                            handleUpdateCantidadRestante(item.id, newValue);
+                    <div className="rounded-lg border -mx-4 sm:-mx-6 lg:mx-0 overflow-hidden">
+                      <div className="p-2 sm:p-4 lg:p-6">
+                        <div className="overflow-x-auto overscroll-x-contain touch-pan-x" style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'thin' }}>
+                          <table className="w-full caption-bottom text-xs sm:text-sm">
+                            <thead className="[&_tr]:border-b">
+                              <tr className="border-b transition-colors">
+                                <th className="h-10 sm:h-12 px-1.5 sm:px-2 md:px-4 text-left align-middle font-medium text-muted-foreground text-[10px] sm:text-xs md:text-sm">
+                                  <span className="hidden sm:inline">Nombre</span>
+                                  <span className="sm:hidden">Nom.</span>
+                                </th>
+                                <th className="h-10 sm:h-12 px-1.5 sm:px-2 md:px-4 text-right align-middle font-medium text-muted-foreground text-[10px] sm:text-xs md:text-sm">
+                                  <span className="hidden md:inline">Cantidad Inicial</span>
+                                  <span className="hidden sm:inline md:hidden">Cant. Inicial</span>
+                                  <span className="sm:hidden">Cant.</span>
+                                </th>
+                                <th className="h-10 sm:h-12 px-1.5 sm:px-2 md:px-4 text-right align-middle font-medium text-muted-foreground text-[10px] sm:text-xs md:text-sm">
+                                  <span className="hidden sm:inline">Aumento</span>
+                                  <span className="sm:hidden">Aum.</span>
+                                </th>
+                                <th className="h-10 sm:h-12 px-1.5 sm:px-2 md:px-4 text-right align-middle font-medium text-muted-foreground text-[10px] sm:text-xs md:text-sm">
+                                  <span className="hidden md:inline">Saldo Restante</span>
+                                  <span className="hidden sm:inline md:hidden">Saldo Rest.</span>
+                                  <span className="sm:hidden">Saldo</span>
+                                </th>
+                                <th className="h-10 sm:h-12 px-1.5 sm:px-2 md:px-4 text-right align-middle font-medium text-muted-foreground text-[10px] sm:text-xs md:text-sm">
+                                  <span className="hidden sm:inline">Subtotal</span>
+                                  <span className="sm:hidden">Sub.</span>
+                                </th>
+                                <th className="h-10 sm:h-12 px-1.5 sm:px-2 md:px-4 text-right align-middle font-medium text-muted-foreground text-[10px] sm:text-xs md:text-sm">
+                                  <span className="hidden sm:inline">Acciones</span>
+                                  <span className="sm:hidden">Acc.</span>
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="[&_tr:last-child]:border-0">
+                              {preregistroItems.map((item) => (
+                                <tr key={item.id} className="border-b transition-colors hover:bg-muted/50">
+                                  <td className="p-1.5 sm:p-2 md:p-4 align-middle">
+                                    <p className="font-medium text-xs sm:text-sm truncate max-w-[80px] sm:max-w-none">{item.nombre}</p>
+                                  </td>
+                                  <td className="p-1.5 sm:p-2 md:p-4 align-middle text-right text-xs sm:text-sm">
+                                    {item.cantidad}
+                                  </td>
+                                  <td className="p-1.5 sm:p-2 md:p-4 align-middle text-right text-xs sm:text-sm">
+                                    {item.aumento}
+                                  </td>
+                                  <td className="p-1.5 sm:p-2 md:p-4 align-middle text-right">
+                                    {editingCantidadRestante === item.id ? (
+                                      <div className="flex items-center gap-1 sm:gap-2 justify-end">
+                                        <Input
+                                          type="number"
+                                          min="0"
+                                          max={item.cantidad + item.aumento}
+                                          value={editCantidadRestanteValue}
+                                          onChange={(e) => setEditCantidadRestanteValue(e.target.value)}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                              const newValue = parseInt(editCantidadRestanteValue);
+                                              if (!isNaN(newValue)) {
+                                                handleUpdateCantidadRestante(item.id, newValue);
+                                                setEditingCantidadRestante(null);
+                                                setEditCantidadRestanteValue('');
+                                              }
+                                            } else if (e.key === 'Escape') {
+                                              setEditingCantidadRestante(null);
+                                              setEditCantidadRestanteValue('');
+                                            }
+                                          }}
+                                          className="w-16 sm:w-20 h-7 sm:h-8 text-xs sm:text-sm"
+                                          autoFocus
+                                        />
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+                                          onClick={() => {
+                                            const newValue = parseInt(editCantidadRestanteValue);
+                                            if (!isNaN(newValue)) {
+                                              handleUpdateCantidadRestante(item.id, newValue);
+                                              setEditingCantidadRestante(null);
+                                              setEditCantidadRestanteValue('');
+                                            }
+                                          }}
+                                        >
+                                          <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4" />
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+                                          onClick={() => {
                                             setEditingCantidadRestante(null);
                                             setEditCantidadRestanteValue('');
-                                          }
-                                        } else if (e.key === 'Escape') {
-                                          setEditingCantidadRestante(null);
-                                          setEditCantidadRestanteValue('');
-                                        }
-                                      }}
-                                      className="w-20 h-8"
-                                      autoFocus
-                                    />
+                                          }}
+                                        >
+                                          <X className="h-3 w-3 sm:h-4 sm:w-4" />
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 sm:h-8 px-1.5 sm:px-2 text-xs sm:text-sm"
+                                        onClick={() => {
+                                          setEditingCantidadRestante(item.id);
+                                          setEditCantidadRestanteValue(item.cantidadRestante.toString());
+                                        }}
+                                      >
+                                        {item.cantidadRestante}
+                                      </Button>
+                                    )}
+                                  </td>
+                                  <td className="p-1.5 sm:p-2 md:p-4 align-middle text-right font-semibold text-xs sm:text-sm">
+                                    <span className="hidden sm:inline">Bs. </span>
+                                    <span className="sm:hidden">Bs</span>
+                                    {item.subtotal.toFixed(2)}
+                                  </td>
+                                  <td className="p-1.5 sm:p-2 md:p-4 align-middle text-right">
                                     <Button
-                                      size="sm"
                                       variant="ghost"
-                                      onClick={() => {
-                                        const newValue = parseInt(editCantidadRestanteValue);
-                                        if (!isNaN(newValue)) {
-                                          handleUpdateCantidadRestante(item.id, newValue);
-                                          setEditingCantidadRestante(null);
-                                          setEditCantidadRestanteValue('');
-                                        }
-                                      }}
-                                    >
-                                      <CheckCircle className="h-4 w-4" />
-                                    </Button>
-                                    <Button
                                       size="sm"
-                                      variant="ghost"
+                                      className="h-7 w-7 sm:h-8 sm:w-8 p-0"
                                       onClick={() => {
-                                        setEditingCantidadRestante(null);
-                                        setEditCantidadRestanteValue('');
+                                        setEditingCantidadRestante(item.id);
+                                        setEditCantidadRestanteValue(item.cantidadRestante.toString());
                                       }}
+                                      disabled={editingCantidadRestante === item.id}
                                     >
-                                      <X className="h-4 w-4" />
+                                      <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
                                     </Button>
-                                  </div>
-                                ) : (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => {
-                                      setEditingCantidadRestante(item.id);
-                                      setEditCantidadRestanteValue(item.cantidadRestante.toString());
-                                    }}
-                                  >
-                                    {item.cantidadRestante}
-                                  </Button>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-right font-semibold">
-                                Bs. {item.subtotal.toFixed(2)}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => {
-                                    setEditingCantidadRestante(item.id);
-                                    setEditCantidadRestanteValue(item.cantidadRestante.toString());
-                                  }}
-                                  disabled={editingCantidadRestante === item.id}
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
                     </div>
                     <div className="flex justify-between items-center pt-4 border-t">
                       <p className="text-lg font-semibold">Total:</p>
@@ -1094,15 +1119,6 @@ export default function NewSale() {
                   <ShoppingCart className="h-5 w-5" />
                 )}
                 {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? 'Resumen de Venta' : 'Carrito'}
-                {!user || (user.rol !== 'minorista' && user.rol !== 'mayorista') ? (
-                  itemCount > 0 && (
-                    <Badge className="ml-auto">{itemCount}</Badge>
-                  )
-                ) : (
-                  preregistroItems.length > 0 && (
-                    <Badge className="ml-auto">{preregistroItems.length}</Badge>
-                  )
-                )}
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
@@ -1569,9 +1585,6 @@ export default function NewSale() {
                   <ShoppingCart className="h-5 w-5" />
                 )}
                 <span>{(user?.rol === 'minorista' || user?.rol === 'mayorista') ? 'Resumen' : 'Carrito'}</span>
-                {itemCount > 0 && (
-                  <Badge className="ml-auto">{itemCount}</Badge>
-                )}
               </SheetTitle>
               <SheetDescription className="sr-only">
                 {(user?.rol === 'minorista' || user?.rol === 'mayorista') 

@@ -512,6 +512,21 @@ El sistema implementa un manejo robusto de fechas para evitar problemas de zona 
 
 ---
 
-**Versión**: 2.16.0  
-**Última actualización**: Diciembre 2025  
+- ✅ **Mejoras en v2.20.0:**
+  - ✅ **Optimización de tabla de preregistros para móvil y tablet:**
+    - Tabla responsive que se adapta completamente a pantallas móviles sin necesidad de scroll horizontal
+    - Padding responsive: más compacto en móvil (p-1.5), tablet (p-2) y desktop (p-4)
+    - Tamaños de fuente adaptativos: text-[10px] en móvil, text-xs en tablet, text-sm en desktop
+    - Headers abreviados en móvil para ahorrar espacio: "Nombre" → "Nom.", "Cantidad Inicial" → "Cant.", etc.
+    - Controles más compactos: botones e inputs más pequeños en móvil (h-7 w-7 vs h-8 w-8)
+    - Texto truncado para nombres largos de productos en móvil
+    - Scroll horizontal mejorado con soporte táctil (touch-pan-x, WebkitOverflowScrolling)
+    - Aplicado tanto para minoristas como mayoristas
+  - ✅ **Mejoras de interfaz:**
+    - Eliminado código del producto que aparecía debajo del nombre en la tabla de preregistros
+    - Eliminado badge numérico del resumen de venta (tanto en desktop como móvil/tablet)
+    - Interfaz más limpia y enfocada en la información esencial
+
+**Versión**: 2.20.0  
+**Última actualización**: Enero 2026  
 **Estado**: Sistema completo con Preregistros, Roles Minorista/Mayorista y Gestión de Precios Mejorada - En producción
