@@ -12,7 +12,9 @@ import { preregistrosService } from '@/services/preregistros.service';
 import { transferenciasService } from '@/services/transferencias.service';
 import { saldosRestantesMayoristasService } from '@/services/saldos-restantes-mayoristas.service';
 import { pagosMayoristasService } from '@/services/pagos-mayoristas.service';
-import { getLocalDateISO } from '@/lib/utils';
+import { ventasMinoristasService } from '@/services/ventas-minoristas.service';
+import { ventasMayoristasService } from '@/services/ventas-mayoristas.service';
+import { getLocalDateISO, getLocalTimeISO } from '@/lib/utils';
 import { printTicket } from '@/utils/print';
 import { salesService } from '@/services/sales.service';
 import { usersService } from '@/services/users.service';
@@ -151,42 +153,84 @@ export default function NewSale() {
 
       try {
         setIsLoadingPreregistros(true);
+        const fechaActual = getLocalDateISO();
         
         if (user.rol === 'minorista') {
           // Cargar preregistros del minorista actual (sin filtrar por fecha, son reutilizables)
           const preregistros = await preregistrosService.getPreregistrosMinorista(user.id);
-          const items: PreregistroVentaItem[] = preregistros.map(p => ({
-            id: p.id,
-            nombre: p.producto?.nombre || 'N/A',
-            codigo: p.producto?.codigo,
-            cantidad: p.cantidad,
-            aumento: p.aumento || 0, // Usar el aumento de la base de datos (de pedidos entregados)
-            cantidadRestante: p.cantidad, // Inicialmente igual a cantidad (saldo inicial)
-            precio_unitario: p.producto?.precio_por_unidad || 0,
-            subtotal: 0,
-            id_producto: p.id_producto,
-            id_categoria: p.producto?.id_categoria, // Agregar categoría para el resumen
-          }));
-          // Calcular subtotales iniciales (inicialmente 0 porque cantidadRestante = cantidad)
+          
+          // Cargar aumentos del día desde ventas_minoristas
+          const aumentosDelDia = await ventasMinoristasService.getAumentosDelDia(user.id, fechaActual);
+          
+          // Crear un mapa de aumentos por producto
+          const aumentosPorProducto = new Map<string, number>();
+          aumentosDelDia.forEach(aumento => {
+            const actual = aumentosPorProducto.get(aumento.id_producto) || 0;
+            aumentosPorProducto.set(aumento.id_producto, actual + aumento.cantidad_aumento);
+          });
+          
+          const items: PreregistroVentaItem[] = preregistros.map(p => {
+            const aumento = aumentosPorProducto.get(p.id_producto) || 0;
+            const saldoDisponible = p.cantidad + aumento;
+            return {
+              id: p.id,
+              nombre: p.producto?.nombre || 'N/A',
+              codigo: p.producto?.codigo,
+              cantidad: p.cantidad,
+              aumento: aumento, // Aumentos del día desde ventas_minoristas
+              cantidadRestante: saldoDisponible, // Inicialmente igual a saldo disponible
+              precio_unitario: p.producto?.precio_por_unidad || 0,
+              subtotal: 0,
+              id_producto: p.id_producto,
+              id_categoria: p.producto?.id_categoria,
+            };
+          });
+          
+          // Calcular subtotales iniciales (inicialmente 0 porque cantidadRestante = saldo disponible)
           items.forEach(item => {
             item.subtotal = (item.cantidad + item.aumento - item.cantidadRestante) * item.precio_unitario;
           });
           setPreregistroItems(items);
         } else if (user.rol === 'mayorista') {
-          const preregistros = await preregistrosService.getPreregistrosMayorista(user.id, fecha);
-          const items: PreregistroVentaItem[] = preregistros.map(p => ({
-            id: p.id,
-            nombre: p.producto?.nombre || 'N/A',
-            codigo: p.producto?.codigo,
-            cantidad: p.cantidad,
-            aumento: p.aumento || 0, // Usar el aumento de la base de datos (de pedidos entregados)
-            cantidadRestante: p.cantidad, // Inicialmente igual a cantidad (saldo inicial)
-            precio_unitario: p.producto?.precio_por_mayor ?? 0,
-            subtotal: 0,
-            id_producto: p.id_producto,
-            id_categoria: p.producto?.id_categoria, // Agregar categoría para el resumen
-          }));
-          // Calcular subtotales iniciales (inicialmente 0 porque cantidadRestante = cantidad)
+          // Cargar preregistros del mayorista para la fecha actual
+          const preregistros = await preregistrosService.getPreregistrosMayorista(user.id, fechaActual);
+          
+          // Cargar aumentos del día desde ventas_mayoristas
+          const aumentosDelDia = await ventasMayoristasService.getAumentosDelPeriodo(
+            user.id, 
+            fechaActual, 
+            fechaActual
+          );
+          
+          // Crear un mapa de aumentos por producto
+          const aumentosPorProducto = new Map<string, number>();
+          aumentosDelDia.forEach(aumento => {
+            const actual = aumentosPorProducto.get(aumento.id_producto) || 0;
+            aumentosPorProducto.set(aumento.id_producto, actual + aumento.cantidad_aumento);
+          });
+          
+          // Obtener último arqueo cerrado para calcular saldos arrastrados
+          // TODO: Implementar cuando tengamos el servicio de arqueos
+          // Por ahora, solo usamos preregistros + aumentos del día
+          
+          const items: PreregistroVentaItem[] = preregistros.map(p => {
+            const aumento = aumentosPorProducto.get(p.id_producto) || 0;
+            const saldoDisponible = p.cantidad + aumento; // TODO: Sumar saldos arrastrados del último arqueo
+            return {
+              id: p.id,
+              nombre: p.producto?.nombre || 'N/A',
+              codigo: p.producto?.codigo,
+              cantidad: p.cantidad,
+              aumento: aumento, // Aumentos del día desde ventas_mayoristas
+              cantidadRestante: saldoDisponible, // Inicialmente igual a saldo disponible
+              precio_unitario: p.producto?.precio_por_mayor ?? 0,
+              subtotal: 0,
+              id_producto: p.id_producto,
+              id_categoria: p.producto?.id_categoria,
+            };
+          });
+          
+          // Calcular subtotales iniciales (inicialmente 0 porque cantidadRestante = saldo disponible)
           items.forEach(item => {
             item.subtotal = (item.cantidad + item.aumento - item.cantidadRestante) * item.precio_unitario;
           });
@@ -214,18 +258,9 @@ export default function NewSale() {
     }));
   };
 
-  // Función para actualizar aumento
-  const handleUpdateAumento = (itemId: string, newValue: number) => {
-    setPreregistroItems(prev => prev.map(item => {
-      if (item.id === itemId) {
-        const aumento = Math.max(0, newValue);
-        const cantidadRestante = Math.min(item.cantidadRestante, item.cantidad + aumento);
-        const subtotal = (item.cantidad + aumento - cantidadRestante) * item.precio_unitario;
-        return { ...item, aumento, cantidadRestante, subtotal };
-      }
-      return item;
-    }));
-  };
+  // NOTA: La función handleUpdateAumento fue eliminada.
+  // Los aumentos ahora se registran automáticamente cuando se entregan pedidos
+  // y se cargan desde las tablas ventas_minoristas/ventas_mayoristas.
 
   // Calcular total de preregistros
   const preregistroTotal = useMemo(() => {
@@ -361,6 +396,46 @@ export default function NewSale() {
         }
 
         const newSale = await createSaleMutation.mutateAsync(saleData);
+
+        // Guardar registros en ventas_minoristas o ventas_mayoristas
+        const fechaActual = getLocalDateISO();
+        const horaActual = getLocalTimeISO();
+        
+        if (user.rol === 'minorista') {
+          // Crear registros en ventas_minoristas para cada producto vendido
+          for (const item of itemsConVenta) {
+            const cantidadVendida = item.cantidad + item.aumento - item.cantidadRestante;
+            if (cantidadVendida > 0) {
+              await ventasMinoristasService.create({
+                id_minorista: user.id,
+                id_producto: item.id_producto,
+                cantidad_vendida: cantidadVendida,
+                cantidad_aumento: 0, // Los aumentos ya están registrados cuando se entregan pedidos
+                precio_unitario: item.precio_unitario,
+                fecha: fechaActual,
+                hora: horaActual,
+                observaciones: `Venta registrada desde preregistros - Venta #${newSale.id}`,
+              });
+            }
+          }
+        } else if (user.rol === 'mayorista') {
+          // Crear registros en ventas_mayoristas para cada producto vendido
+          for (const item of itemsConVenta) {
+            const cantidadVendida = item.cantidad + item.aumento - item.cantidadRestante;
+            if (cantidadVendida > 0) {
+              await ventasMayoristasService.create({
+                id_mayorista: user.id,
+                id_producto: item.id_producto,
+                cantidad_vendida: cantidadVendida,
+                cantidad_aumento: 0, // Los aumentos ya están registrados cuando se entregan pedidos
+                precio_por_mayor: item.precio_unitario,
+                fecha: fechaActual,
+                hora: horaActual,
+                observaciones: `Venta registrada desde preregistros - Venta #${newSale.id}`,
+              });
+            }
+          }
+        }
 
         // Guardar datos de la venta
         setSaleTotal(preregistroTotal);

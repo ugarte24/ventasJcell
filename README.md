@@ -184,6 +184,12 @@ ventacontrol-pro/
 - `/categorias` - Gestión de categorías (CRUD completo, solo admin)
 - `/reportes` - Reportes y análisis con gráficos
 - `/usuarios` - Gestión de usuarios (solo admin)
+- `/arqueos/minorista` - Arqueos diarios de minoristas
+- `/arqueos/mayorista` - Arqueos flexibles de mayoristas
+- `/preregistros/minorista` - Preregistros de minoristas
+- `/preregistros/mayorista` - Preregistros de mayoristas
+- `/pedidos` - Mis pedidos (minoristas/mayoristas)
+- `/escanear-qr` - Escanear QR para transferencias (minoristas)
 
 ## 🔐 Roles y Permisos
 
@@ -527,6 +533,21 @@ El sistema implementa un manejo robusto de fechas para evitar problemas de zona 
     - Eliminado badge numérico del resumen de venta (tanto en desktop como móvil/tablet)
     - Interfaz más limpia y enfocada en la información esencial
 
-**Versión**: 2.20.0  
+- ✅ **Mejoras en v2.21.0 - Sistema de Minoristas y Mayoristas:**
+  - ✅ **Nueva estructura de datos**: Tablas separadas para ventas de minoristas (`ventas_minoristas`) y mayoristas (`ventas_mayoristas`)
+  - ✅ **Sistema de arqueos diferenciado**: 
+    - Arqueos diarios para minoristas (`arqueos_minoristas`)
+    - Arqueos flexibles para mayoristas (`arqueos_mayoristas`) con arrastre de saldos
+  - ✅ **Control de aumentos**: Los aumentos ahora se registran automáticamente desde pedidos entregados en las tablas de ventas
+  - ✅ **Cálculo automático de saldos**: Funciones SQL para calcular saldos disponibles (preregistro + aumentos - vendido)
+  - ✅ **Notificaciones de arqueo**: Sistema de notificaciones para mayoristas sin arqueo por más de 2 días
+  - ✅ **Páginas de arqueos**: Interfaces dedicadas para gestionar arqueos de minoristas y mayoristas
+  - ✅ **Integración con Dashboard**: Notificaciones de arqueo visibles para administradores en el Dashboard
+  - ✅ **Servicios actualizados**: Nuevos servicios TypeScript para gestionar ventas y arqueos de minoristas/mayoristas
+  - ✅ **Actualización de NewSale**: La página de nueva venta ahora usa la nueva estructura de datos
+  - ✅ **Row Level Security**: Políticas RLS configuradas para control de acceso por rol
+  - ✅ **Migraciones SQL**: Scripts completos de migración y documentación para reestructuración
+
+**Versión**: 2.21.0  
 **Última actualización**: Enero 2026  
-**Estado**: Sistema completo con Preregistros, Roles Minorista/Mayorista y Gestión de Precios Mejorada - En producción
+**Estado**: Sistema completo con Preregistros, Roles Minorista/Mayorista, Gestión de Precios Mejorada y Sistema de Arqueos Diferenciado - En producción

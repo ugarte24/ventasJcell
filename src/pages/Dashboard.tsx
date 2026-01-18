@@ -19,6 +19,7 @@ import { preregistrosService } from '@/services/preregistros.service';
 import { getLocalDateISO, cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { NotificacionesArqueo } from '@/components/NotificacionesArqueo';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -574,6 +575,13 @@ export default function Dashboard() {
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* Notificaciones de Arqueo - Solo para administradores */}
+        {user?.rol === 'admin' && (
+          <div className="animate-fade-in">
+            <NotificacionesArqueo />
+          </div>
         )}
       </div>
     </DashboardLayout>

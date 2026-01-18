@@ -140,35 +140,8 @@ export const preregistrosService = {
     } as PreregistroMinorista;
   },
 
-  async updateAumentoMinorista(
-    id: string,
-    aumento: number
-  ): Promise<PreregistroMinorista> {
-    const updatedAt = getLocalDateTimeISO();
-
-    const { data, error } = await supabase
-      .from('preregistros_minorista')
-      .update({
-        aumento,
-        updated_at: updatedAt,
-      })
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) throw new Error(handleSupabaseError(error));
-
-    const [producto, minorista] = await Promise.all([
-      productsService.getById(data.id_producto),
-      data.id_minorista ? usersService.getById(data.id_minorista) : null,
-    ]);
-
-    return {
-      ...data,
-      producto: producto || undefined,
-      minorista: minorista || undefined,
-    } as PreregistroMinorista;
-  },
+  // NOTA: La función updateAumentoMinorista fue eliminada.
+  // Los aumentos ahora se registran en la tabla ventas_minoristas.
 
   async deletePreregistroMinorista(id: string): Promise<void> {
     const { error } = await supabase
@@ -324,35 +297,8 @@ export const preregistrosService = {
     } as PreregistroMayorista;
   },
 
-  async updateAumentoMayorista(
-    id: string,
-    aumento: number
-  ): Promise<PreregistroMayorista> {
-    const updatedAt = getLocalDateTimeISO();
-
-    const { data, error } = await supabase
-      .from('preregistros_mayorista')
-      .update({
-        aumento,
-        updated_at: updatedAt,
-      })
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) throw new Error(handleSupabaseError(error));
-
-    const [producto, mayorista] = await Promise.all([
-      productsService.getById(data.id_producto),
-      usersService.getById(data.id_mayorista),
-    ]);
-
-    return {
-      ...data,
-      producto: producto || undefined,
-      mayorista: mayorista || undefined,
-    } as PreregistroMayorista;
-  },
+  // NOTA: La función updateAumentoMayorista fue eliminada.
+  // Los aumentos ahora se registran en la tabla ventas_mayoristas.
 
   async deletePreregistroMayorista(id: string): Promise<void> {
     const { error } = await supabase

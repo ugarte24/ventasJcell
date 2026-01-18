@@ -26,6 +26,8 @@ import ControlVentas from "./pages/ControlVentas";
 import EscanearQR from "./pages/EscanearQR";
 import Pedidos from "./pages/Pedidos";
 import AdminPedidos from "./pages/AdminPedidos";
+import ArqueosMinoristas from "./pages/ArqueosMinoristas";
+import ArqueosMayoristas from "./pages/ArqueosMayoristas";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -67,6 +69,8 @@ const App = () => (
               <Route path="/escanear-qr" element={<EscanearQR />} />
               <Route path="/pedidos" element={<Pedidos />} />
               <Route path="/admin/pedidos" element={<AdminPedidos />} />
+              <Route path="/arqueos/minorista" element={<ArqueosMinoristas />} />
+              <Route path="/arqueos/mayorista" element={<ArqueosMayoristas />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

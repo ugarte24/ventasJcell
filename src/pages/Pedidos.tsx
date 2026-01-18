@@ -103,17 +103,6 @@ export default function Pedidos() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
-  // Solo minoristas y mayoristas pueden acceder
-  if (!user || (user.rol !== 'minorista' && user.rol !== 'mayorista')) {
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-96">
-          <p className="text-muted-foreground">Solo minoristas y mayoristas pueden acceder a esta página</p>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
   // Obtener preregistros según el rol
   const { data: preregistros = [], isLoading: loadingPreregistros } = useQuery({
     queryKey: ['preregistros', user.rol, user.id],
@@ -414,6 +403,17 @@ export default function Pedidos() {
         return <Badge variant="outline">{estado}</Badge>;
     }
   };
+
+  // Solo minoristas y mayoristas pueden acceder
+  if (!user || (user.rol !== 'minorista' && user.rol !== 'mayorista')) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-96">
+          <p className="text-muted-foreground">Solo minoristas y mayoristas pueden acceder a esta página</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>

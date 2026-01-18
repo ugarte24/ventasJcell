@@ -209,6 +209,156 @@ export interface SaldoRestanteMayorista {
   producto?: Product;
 }
 
+// ============================================================================
+// VENTAS MINORISTAS Y MAYORISTAS
+// ============================================================================
+
+export interface VentaMinorista {
+  id: string;
+  id_minorista: string;
+  id_producto: string;
+  cantidad_vendida: number;
+  cantidad_aumento: number;
+  precio_unitario: number;
+  total: number;
+  fecha: string;
+  hora: string;
+  id_pedido?: string;
+  observaciones?: string;
+  created_at: string;
+  updated_at: string;
+  // Datos relacionados
+  minorista?: User;
+  producto?: Product;
+  pedido?: Pedido;
+}
+
+export interface VentaMayorista {
+  id: string;
+  id_mayorista: string;
+  id_producto: string;
+  cantidad_vendida: number;
+  cantidad_aumento: number;
+  precio_por_mayor: number;
+  total: number;
+  fecha: string;
+  hora: string;
+  id_pedido?: string;
+  observaciones?: string;
+  created_at: string;
+  updated_at: string;
+  // Datos relacionados
+  mayorista?: User;
+  producto?: Product;
+  pedido?: Pedido;
+}
+
+export interface CreateVentaMinoristaData {
+  id_minorista: string;
+  id_producto: string;
+  cantidad_vendida: number;
+  cantidad_aumento: number;
+  precio_unitario: number;
+  fecha: string;
+  hora: string;
+  id_pedido?: string;
+  observaciones?: string;
+}
+
+export interface CreateVentaMayoristaData {
+  id_mayorista: string;
+  id_producto: string;
+  cantidad_vendida: number;
+  cantidad_aumento: number;
+  precio_por_mayor: number;
+  fecha: string;
+  hora: string;
+  id_pedido?: string;
+  observaciones?: string;
+}
+
+// ============================================================================
+// ARQUEOS
+// ============================================================================
+
+export interface ArqueoMinorista {
+  id: string;
+  id_minorista: string;
+  fecha: string;
+  hora_apertura?: string;
+  hora_cierre?: string;
+  ventas_del_periodo: number;
+  saldos_restantes: Array<{ id_producto: string; cantidad_restante: number }>;
+  efectivo_recibido: number;
+  diferencia: number;
+  observaciones?: string;
+  estado: 'abierto' | 'cerrado';
+  created_at: string;
+  updated_at: string;
+  // Datos relacionados
+  minorista?: User;
+}
+
+export interface ArqueoMayorista {
+  id: string;
+  id_mayorista: string;
+  fecha_inicio: string;
+  fecha_fin: string;
+  hora_apertura?: string;
+  hora_cierre?: string;
+  ventas_del_periodo: number;
+  saldos_restantes: Array<{ id_producto: string; cantidad_restante: number }>;
+  efectivo_recibido: number;
+  diferencia: number;
+  observaciones?: string;
+  estado: 'abierto' | 'cerrado';
+  created_at: string;
+  updated_at: string;
+  // Datos relacionados
+  mayorista?: User;
+}
+
+export interface CreateArqueoMinoristaData {
+  id_minorista: string;
+  fecha: string;
+  hora_apertura?: string;
+  hora_cierre?: string;
+  ventas_del_periodo: number;
+  saldos_restantes: Array<{ id_producto: string; cantidad_restante: number }>;
+  efectivo_recibido: number;
+  observaciones?: string;
+  estado?: 'abierto' | 'cerrado';
+}
+
+export interface CreateArqueoMayoristaData {
+  id_mayorista: string;
+  fecha_inicio: string;
+  fecha_fin: string;
+  hora_apertura?: string;
+  hora_cierre?: string;
+  ventas_del_periodo: number;
+  saldos_restantes: Array<{ id_producto: string; cantidad_restante: number }>;
+  efectivo_recibido: number;
+  observaciones?: string;
+  estado?: 'abierto' | 'cerrado';
+}
+
+// ============================================================================
+// NOTIFICACIONES DE ARQUEO
+// ============================================================================
+
+export interface NotificacionArqueo {
+  id: string;
+  id_mayorista: string;
+  fecha_ultimo_arqueo?: string;
+  dias_sin_arqueo: number;
+  estado: 'pendiente' | 'vista' | 'resuelta';
+  created_at: string;
+  updated_at: string;
+  // Datos relacionados
+  mayorista?: User;
+}
+
 export interface CashRegister {
   id: string;
   fecha: string;

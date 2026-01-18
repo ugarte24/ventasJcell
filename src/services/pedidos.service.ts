@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { Pedido, DetallePedido, Product } from '@/types';
 import { handleSupabaseError } from '@/lib/error-handler';
-import { getLocalDateTimeISO, getLocalDateISO } from '@/lib/utils';
+import { getLocalDateTimeISO, getLocalDateISO, getLocalTimeISO } from '@/lib/utils';
 import { productsService } from './products.service';
 import { usersService } from './users.service';
 import { preregistrosService } from './preregistros.service';
@@ -136,7 +136,7 @@ export const pedidosService = {
     const updatedAt = getLocalDateTimeISO();
     const fechaEntrega = updates.estado === 'entregado' ? getLocalDateISO() : updates.fecha_entrega;
 
-    // Si se está marcando como entregado, actualizar preregistros
+    // Si se está marcando como entregado, registrar aumentos en ventas
     if (updates.estado === 'entregado') {
       const pedido = await this.getById(id);
       if (!pedido) {
@@ -145,42 +145,78 @@ export const pedidosService = {
 
       // Obtener detalles del pedido
       const detalles = await this.getDetallesByPedidoId(id);
+      const fechaEntregaFinal = fechaEntrega || getLocalDateISO();
+      const horaEntrega = getLocalTimeISO();
       
-      // Actualizar preregistros según el tipo de usuario
+      // Importar servicios de ventas
+      const { ventasMinoristasService } = await import('./ventas-minoristas.service');
+      const { ventasMayoristasService } = await import('./ventas-mayoristas.service');
+      const { productsService } = await import('./products.service');
+      
+      // Registrar aumentos según el tipo de usuario
       if (pedido.tipo_usuario === 'minorista') {
-        // Para minoristas: actualizar campo aumento en preregistros_minorista
+        // Para minoristas: crear registros en ventas_minoristas
         for (const detalle of detalles) {
+          // Verificar que existe preregistro (opcional, pero recomendado)
           const preregistros = await preregistrosService.getPreregistrosMinorista(pedido.id_usuario);
           const preregistroProducto = preregistros.find(p => p.id_producto === detalle.id_producto);
           
-          if (preregistroProducto) {
-            // Actualizar campo aumento sumando la cantidad del pedido
-            await preregistrosService.updateAumentoMinorista(
-              preregistroProducto.id,
-              (preregistroProducto.aumento || 0) + detalle.cantidad
-            );
-          } else {
-            // Si no existe preregistro, no se puede agregar aumento
+          if (!preregistroProducto) {
             throw new Error(`No existe preregistro para el producto ${detalle.id_producto}. El pedido solo puede incluir productos con preregistro.`);
           }
+          
+          // Obtener precio del producto
+          const producto = await productsService.getById(detalle.id_producto);
+          if (!producto) {
+            throw new Error(`Producto ${detalle.id_producto} no encontrado`);
+          }
+          
+          // Crear registro de aumento en ventas_minoristas
+          await ventasMinoristasService.create({
+            id_minorista: pedido.id_usuario,
+            id_producto: detalle.id_producto,
+            cantidad_vendida: 0, // Solo es un aumento, no una venta
+            cantidad_aumento: detalle.cantidad,
+            precio_unitario: producto.precio_por_unidad,
+            fecha: fechaEntregaFinal,
+            hora: horaEntrega,
+            id_pedido: id,
+            observaciones: `Aumento por pedido entregado #${id}`,
+          });
         }
       } else if (pedido.tipo_usuario === 'mayorista') {
-        // Para mayoristas: actualizar campo aumento en preregistros_mayorista
-        const fecha = getLocalDateISO();
+        // Para mayoristas: crear registros en ventas_mayoristas
         for (const detalle of detalles) {
-          const preregistros = await preregistrosService.getPreregistrosMayorista(pedido.id_usuario, fecha);
-          const preregistroProducto = preregistros.find(p => p.id_producto === detalle.id_producto && p.fecha === fecha);
+          // Verificar que existe preregistro (opcional, pero recomendado)
+          const preregistros = await preregistrosService.getPreregistrosMayorista(pedido.id_usuario, fechaEntregaFinal);
+          const preregistroProducto = preregistros.find(p => p.id_producto === detalle.id_producto && p.fecha === fechaEntregaFinal);
           
-          if (preregistroProducto) {
-            // Actualizar campo aumento sumando la cantidad del pedido
-            await preregistrosService.updateAumentoMayorista(
-              preregistroProducto.id,
-              (preregistroProducto.aumento || 0) + detalle.cantidad
-            );
-          } else {
-            // Si no existe preregistro, no se puede agregar aumento
-            throw new Error(`No existe preregistro para el producto ${detalle.id_producto} en la fecha ${fecha}. El pedido solo puede incluir productos con preregistro.`);
+          if (!preregistroProducto) {
+            throw new Error(`No existe preregistro para el producto ${detalle.id_producto} en la fecha ${fechaEntregaFinal}. El pedido solo puede incluir productos con preregistro.`);
           }
+          
+          // Obtener precio del producto
+          const producto = await productsService.getById(detalle.id_producto);
+          if (!producto) {
+            throw new Error(`Producto ${detalle.id_producto} no encontrado`);
+          }
+          
+          if (!producto.precio_por_mayor) {
+            throw new Error(`Producto ${detalle.id_producto} no tiene precio por mayor configurado`);
+          }
+          
+          // Crear registro de aumento en ventas_mayoristas
+          await ventasMayoristasService.create({
+            id_mayorista: pedido.id_usuario,
+            id_producto: detalle.id_producto,
+            cantidad_vendida: 0, // Solo es un aumento, no una venta
+            cantidad_aumento: detalle.cantidad,
+            precio_por_mayor: producto.precio_por_mayor,
+            fecha: fechaEntregaFinal,
+            hora: horaEntrega,
+            id_pedido: id,
+            observaciones: `Aumento por pedido entregado #${id}`,
+          });
         }
       }
     }
