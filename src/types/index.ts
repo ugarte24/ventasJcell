@@ -93,7 +93,6 @@ export interface PreregistroMinorista {
   id_minorista?: string;
   id_producto: string;
   cantidad: number;
-  aumento?: number; // Cantidad adicional recibida de pedidos
   fecha?: string;
   created_at: string;
   updated_at: string;
@@ -107,7 +106,6 @@ export interface PreregistroMayorista {
   id_mayorista: string;
   id_producto: string;
   cantidad: number;
-  aumento?: number; // Cantidad adicional recibida de pedidos
   fecha: string;
   created_at: string;
   updated_at: string;

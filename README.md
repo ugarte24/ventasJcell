@@ -548,6 +548,25 @@ El sistema implementa un manejo robusto de fechas para evitar problemas de zona 
   - ✅ **Row Level Security**: Políticas RLS configuradas para control de acceso por rol
   - ✅ **Migraciones SQL**: Scripts completos de migración y documentación para reestructuración
 
-**Versión**: 2.21.0  
+- ✅ **Mejoras en v2.22.0 - Optimización de Rendimiento:**
+  - ✅ **Optimización de carga de preregistros**: 
+    - Implementación de JOINs de Supabase para obtener datos relacionados en una sola query
+    - Eliminación de múltiples llamadas individuales a `productsService.getById` y `usersService.getById`
+    - Reducción significativa de tiempo de carga: de N*2 llamadas a 1 sola query (donde N = número de preregistros)
+    - Mejora notable en tablas con muchos preregistros (100+ elementos)
+  - ✅ **Funciones optimizadas**:
+    - `getPreregistrosMinorista()`: Usa JOINs para productos y minoristas
+    - `getPreregistrosMayorista()`: Usa JOINs para productos y mayoristas
+    - `createPreregistroMinorista()`: JOINs en select después de insertar
+    - `createPreregistroMayorista()`: JOINs en select después de insertar
+    - `updatePreregistroMinorista()`: JOINs para obtener datos actualizados
+    - `updatePreregistroMayorista()`: JOINs para obtener datos actualizados
+  - ✅ **Mejoras en interfaz de preregistros**:
+    - Diálogo "Nuevo Preregistro" simplificado: solo selección de minorista/mayorista
+    - Gestión de productos centralizada en diálogo dedicado "Gestionar Productos"
+    - Formulario de agregar producto arriba, tabla de productos abajo
+    - Mejor organización y flujo de trabajo
+
+**Versión**: 2.22.0  
 **Última actualización**: Enero 2026  
-**Estado**: Sistema completo con Preregistros, Roles Minorista/Mayorista, Gestión de Precios Mejorada y Sistema de Arqueos Diferenciado - En producción
+**Estado**: Sistema completo con Preregistros, Roles Minorista/Mayorista, Gestión de Precios Mejorada, Sistema de Arqueos Diferenciado y Optimizaciones de Rendimiento - En producción

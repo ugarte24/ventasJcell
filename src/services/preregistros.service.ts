@@ -11,9 +11,27 @@ export const preregistrosService = {
   // ============================================================================
 
   async getPreregistrosMinorista(idMinorista?: string): Promise<PreregistroMinorista[]> {
+    // Usar JOINs de Supabase para obtener todos los datos en una sola query
     let query = supabase
       .from('preregistros_minorista')
-      .select('*');
+      .select(`
+        *,
+        producto:productos!id_producto (
+          id,
+          nombre,
+          codigo,
+          precio_por_unidad,
+          precio_por_mayor,
+          stock_actual,
+          estado
+        ),
+        minorista:usuarios!id_minorista (
+          id,
+          nombre,
+          usuario,
+          estado
+        )
+      `);
 
     if (idMinorista) {
       query = query.eq('id_minorista', idMinorista);
@@ -23,22 +41,12 @@ export const preregistrosService = {
 
     if (error) throw new Error(handleSupabaseError(error));
 
-    // Cargar datos de productos y minoristas
-    const preregistrosCompletos = await Promise.all(
-      (data || []).map(async (preregistro) => {
-        const [producto, minorista] = await Promise.all([
-          productsService.getById(preregistro.id_producto),
-          preregistro.id_minorista ? usersService.getById(preregistro.id_minorista) : null,
-        ]);
-        return {
-          ...preregistro,
-          producto: producto || undefined,
-          minorista: minorista || undefined,
-        } as PreregistroMinorista;
-      })
-    );
-
-    return preregistrosCompletos;
+    // Transformar los datos para que coincidan con el tipo PreregistroMinorista
+    return (data || []).map((preregistro: any) => ({
+      ...preregistro,
+      producto: preregistro.producto || undefined,
+      minorista: preregistro.minorista || undefined,
+    })) as PreregistroMinorista[];
   },
 
   async createPreregistroMinorista(
@@ -71,15 +79,36 @@ export const preregistrosService = {
 
       if (error) throw new Error(handleSupabaseError(error));
       
-      const [producto, minorista] = await Promise.all([
-        productsService.getById(idProducto),
-        usersService.getById(idMinorista),
-      ]);
+      // Usar JOIN para obtener datos relacionados
+      const { data: dataWithRelations, error: relationsError } = await supabase
+        .from('preregistros_minorista')
+        .select(`
+          *,
+          producto:productos!id_producto (
+            id,
+            nombre,
+            codigo,
+            precio_por_unidad,
+            precio_por_mayor,
+            stock_actual,
+            estado
+          ),
+          minorista:usuarios!id_minorista (
+            id,
+            nombre,
+            usuario,
+            estado
+          )
+        `)
+        .eq('id', data.id)
+        .single();
+
+      if (relationsError) throw new Error(handleSupabaseError(relationsError));
       
       return {
-        ...data,
-        producto: producto || undefined,
-        minorista: minorista || undefined,
+        ...dataWithRelations,
+        producto: dataWithRelations?.producto || undefined,
+        minorista: dataWithRelations?.minorista || undefined,
       } as PreregistroMinorista;
     }
 
@@ -93,33 +122,48 @@ export const preregistrosService = {
         created_at: createdAt,
         updated_at: updatedAt,
       })
-      .select()
+      .select(`
+        *,
+        producto:productos!id_producto (
+          id,
+          nombre,
+          codigo,
+          precio_por_unidad,
+          precio_por_mayor,
+          stock_actual,
+          estado
+        ),
+        minorista:usuarios!id_minorista (
+          id,
+          nombre,
+          usuario,
+          estado
+        )
+      `)
       .single();
 
     if (error) throw new Error(handleSupabaseError(error));
 
-    const [producto, minorista] = await Promise.all([
-      productsService.getById(idProducto),
-      usersService.getById(idMinorista),
-    ]);
-
     return {
       ...data,
-      producto: producto || undefined,
-      minorista: minorista || undefined,
+      producto: data.producto || undefined,
+      minorista: data.minorista || undefined,
     } as PreregistroMinorista;
   },
 
   async updatePreregistroMinorista(
     id: string,
-    cantidad: number
+    updates: {
+      id_producto?: string;
+      cantidad?: number;
+    }
   ): Promise<PreregistroMinorista> {
     const updatedAt = getLocalDateTimeISO();
 
     const { data, error } = await supabase
       .from('preregistros_minorista')
       .update({
-        cantidad,
+        ...updates,
         updated_at: updatedAt,
       })
       .eq('id', id)
@@ -128,15 +172,36 @@ export const preregistrosService = {
 
     if (error) throw new Error(handleSupabaseError(error));
 
-    const [producto, minorista] = await Promise.all([
-      productsService.getById(data.id_producto),
-      data.id_minorista ? usersService.getById(data.id_minorista) : null,
-    ]);
+    // Usar JOIN para obtener datos relacionados en una sola query
+    const { data: dataWithRelations, error: relationsError } = await supabase
+      .from('preregistros_minorista')
+      .select(`
+        *,
+        producto:productos!id_producto (
+          id,
+          nombre,
+          codigo,
+          precio_por_unidad,
+          precio_por_mayor,
+          stock_actual,
+          estado
+        ),
+        minorista:usuarios!id_minorista (
+          id,
+          nombre,
+          usuario,
+          estado
+        )
+      `)
+      .eq('id', data.id)
+      .single();
+
+    if (relationsError) throw new Error(handleSupabaseError(relationsError));
 
     return {
-      ...data,
-      producto: producto || undefined,
-      minorista: minorista || undefined,
+      ...dataWithRelations,
+      producto: dataWithRelations?.producto || undefined,
+      minorista: dataWithRelations?.minorista || undefined,
     } as PreregistroMinorista;
   },
 
@@ -162,9 +227,27 @@ export const preregistrosService = {
   ): Promise<PreregistroMayorista[]> {
     const fechaBusqueda = fecha || getLocalDateISO();
     
+    // Usar JOINs de Supabase para obtener todos los datos en una sola query
     let query = supabase
       .from('preregistros_mayorista')
-      .select('*')
+      .select(`
+        *,
+        producto:productos!id_producto (
+          id,
+          nombre,
+          codigo,
+          precio_por_unidad,
+          precio_por_mayor,
+          stock_actual,
+          estado
+        ),
+        mayorista:usuarios!id_mayorista (
+          id,
+          nombre,
+          usuario,
+          estado
+        )
+      `)
       .eq('fecha', fechaBusqueda);
 
     if (idMayorista) {
@@ -175,23 +258,12 @@ export const preregistrosService = {
 
     if (error) throw new Error(handleSupabaseError(error));
 
-    // Cargar datos de productos y mayoristas
-    const preregistrosCompletos = await Promise.all(
-      (data || []).map(async (preregistro) => {
-        const [producto, mayorista] = await Promise.all([
-          productsService.getById(preregistro.id_producto),
-          usersService.getById(preregistro.id_mayorista),
-        ]);
-
-        return {
-          ...preregistro,
-          producto: producto || undefined,
-          mayorista: mayorista || undefined,
-        } as PreregistroMayorista;
-      })
-    );
-
-    return preregistrosCompletos;
+    // Transformar los datos para que coincidan con el tipo PreregistroMayorista
+    return (data || []).map((preregistro: any) => ({
+      ...preregistro,
+      producto: preregistro.producto || undefined,
+      mayorista: preregistro.mayorista || undefined,
+    })) as PreregistroMayorista[];
   },
 
   async createPreregistroMayorista(
@@ -227,15 +299,36 @@ export const preregistrosService = {
 
       if (error) throw new Error(handleSupabaseError(error));
 
-      const [producto, mayorista] = await Promise.all([
-        productsService.getById(idProducto),
-        usersService.getById(idMayorista),
-      ]);
+      // Usar JOIN para obtener datos relacionados
+      const { data: dataWithRelations, error: relationsError } = await supabase
+        .from('preregistros_mayorista')
+        .select(`
+          *,
+          producto:productos!id_producto (
+            id,
+            nombre,
+            codigo,
+            precio_por_unidad,
+            precio_por_mayor,
+            stock_actual,
+            estado
+          ),
+          mayorista:usuarios!id_mayorista (
+            id,
+            nombre,
+            usuario,
+            estado
+          )
+        `)
+        .eq('id', data.id)
+        .single();
+
+      if (relationsError) throw new Error(handleSupabaseError(relationsError));
 
       return {
-        ...data,
-        producto: producto || undefined,
-        mayorista: mayorista || undefined,
+        ...dataWithRelations,
+        producto: dataWithRelations?.producto || undefined,
+        mayorista: dataWithRelations?.mayorista || undefined,
       } as PreregistroMayorista;
     }
 
@@ -250,33 +343,48 @@ export const preregistrosService = {
         created_at: createdAt,
         updated_at: updatedAt,
       })
-      .select()
+      .select(`
+        *,
+        producto:productos!id_producto (
+          id,
+          nombre,
+          codigo,
+          precio_por_unidad,
+          precio_por_mayor,
+          stock_actual,
+          estado
+        ),
+        mayorista:usuarios!id_mayorista (
+          id,
+          nombre,
+          usuario,
+          estado
+        )
+      `)
       .single();
 
     if (error) throw new Error(handleSupabaseError(error));
 
-    const [producto, mayorista] = await Promise.all([
-      productsService.getById(idProducto),
-      usersService.getById(idMayorista),
-    ]);
-
     return {
       ...data,
-      producto: producto || undefined,
-      mayorista: mayorista || undefined,
+      producto: data.producto || undefined,
+      mayorista: data.mayorista || undefined,
     } as PreregistroMayorista;
   },
 
   async updatePreregistroMayorista(
     id: string,
-    cantidad: number
+    updates: {
+      id_producto?: string;
+      cantidad?: number;
+    }
   ): Promise<PreregistroMayorista> {
     const updatedAt = getLocalDateTimeISO();
 
     const { data, error } = await supabase
       .from('preregistros_mayorista')
       .update({
-        cantidad,
+        ...updates,
         updated_at: updatedAt,
       })
       .eq('id', id)
@@ -285,15 +393,36 @@ export const preregistrosService = {
 
     if (error) throw new Error(handleSupabaseError(error));
 
-    const [producto, mayorista] = await Promise.all([
-      productsService.getById(data.id_producto),
-      usersService.getById(data.id_mayorista),
-    ]);
+    // Usar JOIN para obtener datos relacionados
+    const { data: dataWithRelations, error: relationsError } = await supabase
+      .from('preregistros_mayorista')
+      .select(`
+        *,
+        producto:productos!id_producto (
+          id,
+          nombre,
+          codigo,
+          precio_por_unidad,
+          precio_por_mayor,
+          stock_actual,
+          estado
+        ),
+        mayorista:usuarios!id_mayorista (
+          id,
+          nombre,
+          usuario,
+          estado
+        )
+      `)
+      .eq('id', data.id)
+      .single();
+
+    if (relationsError) throw new Error(handleSupabaseError(relationsError));
 
     return {
-      ...data,
-      producto: producto || undefined,
-      mayorista: mayorista || undefined,
+      ...dataWithRelations,
+      producto: dataWithRelations?.producto || undefined,
+      mayorista: dataWithRelations?.mayorista || undefined,
     } as PreregistroMayorista;
   },
 
