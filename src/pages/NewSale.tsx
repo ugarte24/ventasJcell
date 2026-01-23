@@ -1697,21 +1697,76 @@ export default function NewSale() {
               </SheetDescription>
             </SheetHeader>
             <div className="flex-1 overflow-y-auto">
-              {items.length === 0 ? (
+              {/* Mostrar preregistros si es minorista o mayorista */}
+              {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
+                preregistroItems.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+                    <ClipboardList className="h-16 w-16 text-muted-foreground/50" />
+                    <p className="mt-4 text-muted-foreground">No hay productos en tu resumen</p>
+                    <p className="text-sm text-muted-foreground">Selecciona productos de tu preregistro para agregarlos</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="overflow-y-auto overscroll-contain">
+                      <div className="divide-y">
+                        {preregistroItems.map((item) => {
+                          const cantidadVendida = item.cantidad + item.aumento - item.cantidadRestante;
+                          return cantidadVendida > 0 ? (
+                            <div key={item.id} className="p-4">
+                              <div className="flex items-center gap-3 flex-nowrap">
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-medium text-foreground truncate">{item.nombre}</p>
+                                  <p className="text-sm text-muted-foreground truncate">
+                                    Bs. {item.precio_unitario.toFixed(2)} c/u
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className="w-12 text-center font-medium">{cantidadVendida}</span>
+                                </div>
+                              </div>
+                              <div className="mt-2 text-right">
+                                <p className="text-sm font-semibold">Bs. {item.subtotal.toFixed(2)}</p>
+                              </div>
+                            </div>
+                          ) : null;
+                        })}
+                      </div>
+                    </div>
+                    {/* Resumen por categorías */}
+                    {resumenPorCategoria.length > 0 && (
+                      <div className="border-t p-3 sm:p-4 space-y-2">
+                        <p className="text-sm font-semibold mb-3">Resumen por Categorías:</p>
+                        {resumenPorCategoria.map((categoria, index) => (
+                          <div key={index} className="flex justify-between items-center text-sm">
+                            <span className="text-muted-foreground">{categoria.nombre}:</span>
+                            <span className="font-medium">Bs. {categoria.total.toFixed(2)}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between items-center pt-2 mt-2 border-t">
+                          <p className="text-sm font-semibold">Total General:</p>
+                          <p className="text-xl font-bold text-primary">
+                            Bs. {preregistroTotal.toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    {resumenPorCategoria.length === 0 && (
+                      <div className="border-t p-3 sm:p-4">
+                        <div className="flex justify-between items-center">
+                          <p className="text-sm font-medium">Total:</p>
+                          <p className="text-xl font-bold text-primary">
+                            Bs. {preregistroTotal.toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )
+              ) : items.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-                  {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
-                    <>
-                      <ClipboardList className="h-16 w-16 text-muted-foreground/50" />
-                      <p className="mt-4 text-muted-foreground">No hay productos en tu resumen</p>
-                      <p className="text-sm text-muted-foreground">Selecciona productos de tu preregistro para agregarlos</p>
-                    </>
-                  ) : (
-                    <>
-                      <ShoppingCart className="h-12 w-12 text-muted-foreground/50" />
-                      <p className="mt-4 text-muted-foreground">El carrito está vacío</p>
-                      <p className="text-sm text-muted-foreground">Haz clic en un producto para agregarlo</p>
-                    </>
-                  )}
+                  <ShoppingCart className="h-12 w-12 text-muted-foreground/50" />
+                  <p className="mt-4 text-muted-foreground">El carrito está vacío</p>
+                  <p className="text-sm text-muted-foreground">Haz clic en un producto para agregarlo</p>
                 </div>
               ) : (
                 <>
@@ -2022,18 +2077,46 @@ export default function NewSale() {
                   )}
 
                   {/* Total */}
-                  <div className="border-t bg-muted/30 p-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Subtotal</span>
-                      <span className="text-base font-medium">Bs. {total.toFixed(2)}</span>
+                  {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
+                    <>
+                      {resumenPorCategoria.length > 0 && (
+                        <div className="border-t p-4 space-y-2">
+                          <p className="text-sm font-semibold mb-3">Resumen por Categorías:</p>
+                          {resumenPorCategoria.map((categoria, index) => (
+                            <div key={index} className="flex justify-between items-center text-sm">
+                              <span className="text-muted-foreground">{categoria.nombre}:</span>
+                              <span className="font-medium">Bs. {categoria.total.toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="border-t bg-muted/30 p-4">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Subtotal</span>
+                          <span className="text-base font-medium">Bs. {preregistroTotal.toFixed(2)}</span>
+                        </div>
+                        <div className="mt-2 flex items-center justify-between">
+                          <span className="font-display text-lg font-bold">Total</span>
+                          <span className="font-display text-2xl font-bold text-primary">
+                            Bs. {preregistroTotal.toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="border-t bg-muted/30 p-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Subtotal</span>
+                        <span className="text-base font-medium">Bs. {total.toFixed(2)}</span>
+                      </div>
+                      <div className="mt-2 flex items-center justify-between">
+                        <span className="font-display text-lg font-bold">Total</span>
+                        <span className="font-display text-2xl font-bold text-primary">
+                          Bs. {total.toFixed(2)}
+                        </span>
+                      </div>
                     </div>
-                    <div className="mt-2 flex items-center justify-between">
-                      <span className="font-display text-lg font-bold">Total</span>
-                      <span className="font-display text-2xl font-bold text-primary">
-                        Bs. {total.toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
+                  )}
 
                   {/* Actions */}
                   <div className="p-4 space-y-2 border-t">
@@ -2043,7 +2126,7 @@ export default function NewSale() {
                         handleCompleteSale();
                         setShowCartSheet(false);
                       }}
-                      disabled={itemCount === 0 || createSaleMutation.isPending}
+                      disabled={((user?.rol === 'minorista' || user?.rol === 'mayorista') ? preregistroItems.length === 0 : itemCount === 0) || createSaleMutation.isPending}
                     >
                       {createSaleMutation.isPending ? (
                         <>
