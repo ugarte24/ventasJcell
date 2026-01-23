@@ -28,6 +28,7 @@ import Pedidos from "./pages/Pedidos";
 import AdminPedidos from "./pages/AdminPedidos";
 import ArqueosMinoristas from "./pages/ArqueosMinoristas";
 import ArqueosMayoristas from "./pages/ArqueosMayoristas";
+import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -71,6 +72,7 @@ const App = () => (
               <Route path="/admin/pedidos" element={<AdminPedidos />} />
               <Route path="/arqueos/minorista" element={<ArqueosMinoristas />} />
               <Route path="/arqueos/mayorista" element={<ArqueosMayoristas />} />
+              <Route path="/perfil" element={<Profile />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

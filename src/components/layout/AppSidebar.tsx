@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Home, ShoppingCart, Package, BarChart3, Users, Settings, LogOut, Receipt, FolderTree, UserCircle, Wallet, ArrowLeftRight, DollarSign, Wrench, Calendar, History, Search, ChevronDown, ChevronRight, ClipboardList, Store, QrCode, LayoutDashboard } from 'lucide-react';
+import { Home, ShoppingCart, Package, BarChart3, Users, Settings, LogOut, Receipt, FolderTree, UserCircle, Wallet, ArrowLeftRight, DollarSign, Wrench, Calendar, History, Search, ChevronDown, ChevronRight, ClipboardList, Store, QrCode, LayoutDashboard, User } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/contexts';
 import {
@@ -329,6 +329,18 @@ export function AppSidebar() {
           )}
         </div>
         <SidebarMenu className="mt-1.5">
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Mi Perfil">
+              <NavLink
+                to="/perfil"
+                className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+              >
+                <User className="h-4 w-4 shrink-0" />
+                {!collapsed && <span className="text-sm">Mi Perfil</span>}
+              </NavLink>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton 
               onClick={() => setShowLogoutDialog(true)}
