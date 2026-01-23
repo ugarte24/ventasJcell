@@ -115,10 +115,22 @@ export default function Pedidos() {
   const [pedidoToDelete, setPedidoToDelete] = useState<string | null>(null);
   const itemsPerPage = 20;
 
+  // Verificación temprana: si no hay usuario o no es minorista/mayorista, mostrar mensaje
+  if (!user || (user.rol !== 'minorista' && user.rol !== 'mayorista')) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-96">
+          <p className="text-muted-foreground">No tienes permisos para acceder a esta página</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   // Obtener preregistros según el rol
   const { data: preregistros = [], isLoading: loadingPreregistros } = useQuery({
-    queryKey: ['preregistros', user.rol, user.id],
+    queryKey: ['preregistros', user?.rol, user?.id],
     queryFn: async () => {
+      if (!user) return [];
       if (user.rol === 'minorista') {
         return await preregistrosService.getPreregistrosMinorista(user.id);
       } else if (user.rol === 'mayorista') {
@@ -127,7 +139,7 @@ export default function Pedidos() {
       }
       return [];
     },
-    enabled: !!user,
+    enabled: !!user && (user.rol === 'minorista' || user.rol === 'mayorista'),
   });
 
   // Obtener productos de preregistros (solo productos que tienen preregistro)
@@ -422,17 +434,6 @@ export default function Pedidos() {
         return <Badge variant="outline">{estado}</Badge>;
     }
   };
-
-  // Solo minoristas y mayoristas pueden acceder
-  if (!user || (user.rol !== 'minorista' && user.rol !== 'mayorista')) {
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-96">
-          <p className="text-muted-foreground">Solo minoristas y mayoristas pueden acceder a esta página</p>
-        </div>
-      </DashboardLayout>
-    );
-  }
 
   return (
     <DashboardLayout>
