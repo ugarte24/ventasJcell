@@ -571,7 +571,18 @@ export default function Pedidos() {
                             </TableCell>
                             <TableCell>
                               <div className="flex flex-col">
-                                <span className="font-medium">{format(new Date(pedido.fecha_pedido), 'dd/MM/yyyy', { locale: es })}</span>
+                                <span className="font-medium">
+                                  {(() => {
+                                    // Formatear fecha directamente desde YYYY-MM-DD sin conversión a Date
+                                    // para evitar problemas de zona horaria
+                                    if (pedido.fecha_pedido) {
+                                      const fechaStr = pedido.fecha_pedido.split('T')[0];
+                                      const [year, month, day] = fechaStr.split('-');
+                                      return `${day}/${month}/${year}`;
+                                    }
+                                    return '-';
+                                  })()}
+                                </span>
                                 <span className="text-xs text-muted-foreground">
                                   {format(new Date(pedido.created_at), 'HH:mm', { locale: es })}
                                 </span>
@@ -598,7 +609,14 @@ export default function Pedidos() {
                               {pedido.fecha_entrega 
                                 ? (
                                   <div className="flex flex-col">
-                                    <span className="font-medium">{format(new Date(pedido.fecha_entrega), 'dd/MM/yyyy', { locale: es })}</span>
+                                    <span className="font-medium">
+                                      {(() => {
+                                        // Formatear fecha directamente desde YYYY-MM-DD sin conversión a Date
+                                        const fechaStr = pedido.fecha_entrega.split('T')[0];
+                                        const [year, month, day] = fechaStr.split('-');
+                                        return `${day}/${month}/${year}`;
+                                      })()}
+                                    </span>
                                     <span className="text-xs text-success">✓ Entregado</span>
                                   </div>
                                 )
@@ -901,7 +919,15 @@ export default function Pedidos() {
                 <div>
                   <Label className="text-muted-foreground">Fecha de Pedido</Label>
                   <p className="font-medium">
-                    {format(new Date(selectedPedido.fecha_pedido), 'dd/MM/yyyy', { locale: es })}
+                    {(() => {
+                      // Formatear fecha directamente desde YYYY-MM-DD sin conversión a Date
+                      if (selectedPedido.fecha_pedido) {
+                        const fechaStr = selectedPedido.fecha_pedido.split('T')[0];
+                        const [year, month, day] = fechaStr.split('-');
+                        return `${day}/${month}/${year}`;
+                      }
+                      return '-';
+                    })()}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     {format(new Date(selectedPedido.created_at), 'HH:mm:ss', { locale: es })}
@@ -917,7 +943,12 @@ export default function Pedidos() {
                   <div>
                     <Label className="text-muted-foreground">Fecha de Entrega</Label>
                     <p className="font-medium">
-                      {format(new Date(selectedPedido.fecha_entrega), 'dd/MM/yyyy', { locale: es })}
+                      {(() => {
+                        // Formatear fecha directamente desde YYYY-MM-DD sin conversión a Date
+                        const fechaStr = selectedPedido.fecha_entrega.split('T')[0];
+                        const [year, month, day] = fechaStr.split('-');
+                        return `${day}/${month}/${year}`;
+                      })()}
                     </p>
                     <p className="text-xs text-success mt-1">
                       ✓ Productos agregados a preregistros

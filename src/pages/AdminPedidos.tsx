@@ -376,7 +376,16 @@ export default function AdminPedidos() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            {format(new Date(pedido.fecha_pedido), 'dd/MM/yyyy', { locale: es })}
+                            {(() => {
+                              // Formatear fecha directamente desde YYYY-MM-DD sin conversión a Date
+                              // para evitar problemas de zona horaria
+                              if (pedido.fecha_pedido) {
+                                const fechaStr = pedido.fecha_pedido.split('T')[0];
+                                const [year, month, day] = fechaStr.split('-');
+                                return `${day}/${month}/${year}`;
+                              }
+                              return '-';
+                            })()}
                           </TableCell>
                           <TableCell>
                             {pedido.detalles?.length || 0} producto(s)
@@ -386,7 +395,12 @@ export default function AdminPedidos() {
                           </TableCell>
                           <TableCell>
                             {pedido.fecha_entrega 
-                              ? format(new Date(pedido.fecha_entrega), 'dd/MM/yyyy', { locale: es })
+                              ? (() => {
+                                  // Formatear fecha directamente desde YYYY-MM-DD sin conversión a Date
+                                  const fechaStr = pedido.fecha_entrega.split('T')[0];
+                                  const [year, month, day] = fechaStr.split('-');
+                                  return `${day}/${month}/${year}`;
+                                })()
                               : '-'
                             }
                           </TableCell>
@@ -505,7 +519,15 @@ export default function AdminPedidos() {
                 <div>
                   <Label className="text-muted-foreground">Fecha de Pedido</Label>
                   <p className="font-medium">
-                    {format(new Date(selectedPedido.fecha_pedido), 'dd/MM/yyyy', { locale: es })}
+                    {(() => {
+                      // Formatear fecha directamente desde YYYY-MM-DD sin conversión a Date
+                      if (selectedPedido.fecha_pedido) {
+                        const fechaStr = selectedPedido.fecha_pedido.split('T')[0];
+                        const [year, month, day] = fechaStr.split('-');
+                        return `${day}/${month}/${year}`;
+                      }
+                      return '-';
+                    })()}
                   </p>
                 </div>
                 <div>
@@ -518,7 +540,12 @@ export default function AdminPedidos() {
                   <div>
                     <Label className="text-muted-foreground">Fecha de Entrega</Label>
                     <p className="font-medium">
-                      {format(new Date(selectedPedido.fecha_entrega), 'dd/MM/yyyy', { locale: es })}
+                      {(() => {
+                        // Formatear fecha directamente desde YYYY-MM-DD sin conversión a Date
+                        const fechaStr = selectedPedido.fecha_entrega.split('T')[0];
+                        const [year, month, day] = fechaStr.split('-');
+                        return `${day}/${month}/${year}`;
+                      })()}
                     </p>
                   </div>
                 )}
