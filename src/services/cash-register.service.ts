@@ -9,34 +9,76 @@ export const cashRegisterService = {
     // Obtener fecha local (no UTC) para evitar problemas de zona horaria
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const { data, error } = await supabase
-      .from('arqueos_caja')
-      .select('*')
-      .eq('fecha', today)
-      .eq('estado', 'abierto')
-      .maybeSingle();
-
-    if (error) {
-      // Si es un error de "no encontrado" o 406, retornar null
-      if (error.code === 'PGRST116' || error.code === '406' || error.message?.includes('Not Acceptable')) {
-        return null;
-      }
-      throw new Error(handleSupabaseError(error));
-    }
     
-    return data as CashRegister | null;
+    try {
+      const { data, error } = await supabase
+        .from('arqueos_caja')
+        .select('*')
+        .eq('fecha', today)
+        .eq('estado', 'abierto')
+        .maybeSingle();
+
+      if (error) {
+        // Si es un error de "no encontrado" o 406, retornar null
+        if (error.code === 'PGRST116' || error.code === '406' || error.message?.includes('Not Acceptable')) {
+          return null;
+        }
+        // Si es un error 400, puede ser un problema de sintaxis o RLS
+        if (error.code === '400' || error.message?.includes('Bad Request')) {
+          console.warn('Error 400 al obtener arqueo abierto, intentando sin filtro de estado:', error);
+          // Intentar sin filtro de estado como fallback
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from('arqueos_caja')
+            .select('*')
+            .eq('fecha', today)
+            .maybeSingle();
+          
+          if (fallbackError) {
+            // Si también falla, retornar null
+            if (fallbackError.code === 'PGRST116' || fallbackError.code === '406') {
+              return null;
+            }
+            throw new Error(handleSupabaseError(fallbackError));
+          }
+          
+          // Filtrar manualmente por estado
+          if (fallbackData && fallbackData.estado === 'abierto') {
+            return fallbackData as CashRegister;
+          }
+          return null;
+        }
+        throw new Error(handleSupabaseError(error));
+      }
+      
+      return data as CashRegister | null;
+    } catch (error: any) {
+      // Manejar errores inesperados
+      console.error('Error inesperado al obtener arqueo abierto:', error);
+      return null;
+    }
   },
 
   // Obtener todos los arqueos
   async getAll(): Promise<CashRegister[]> {
+    // Obtener datos ordenados solo por fecha (más compatible)
     const { data, error } = await supabase
       .from('arqueos_caja')
       .select('*')
-      .order('fecha', { ascending: false })
-      .order('hora_apertura', { ascending: false });
+      .order('fecha', { ascending: false });
 
     if (error) throw new Error(handleSupabaseError(error));
-    return data as CashRegister[];
+    
+    // Ordenar manualmente por hora_apertura dentro de cada fecha
+    return (data || []).sort((a, b) => {
+      // Primero por fecha (descendente)
+      if (a.fecha !== b.fecha) {
+        return b.fecha.localeCompare(a.fecha);
+      }
+      // Luego por hora_apertura (descendente)
+      const horaA = a.hora_apertura || '';
+      const horaB = b.hora_apertura || '';
+      return horaB.localeCompare(horaA);
+    }) as CashRegister[];
   },
 
   // Obtener arqueo por ID
