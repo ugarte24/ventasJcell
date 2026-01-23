@@ -89,13 +89,6 @@ export default function AdminPedidos() {
   const [showCancelarDialog, setShowCancelarDialog] = useState(false);
   const [pedidoToAction, setPedidoToAction] = useState<string | null>(null);
 
-  // Solo administradores pueden acceder
-  useEffect(() => {
-    if (user && user.rol !== 'admin') {
-      toast.error('No tienes permisos para acceder a esta página');
-    }
-  }, [user]);
-
   // Obtener todos los pedidos
   const { data: pedidos = [], isLoading } = useQuery({
     queryKey: ['pedidos-admin', estadoFilter, tipoUsuarioFilter],
