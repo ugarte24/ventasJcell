@@ -115,17 +115,6 @@ export default function Pedidos() {
   const [pedidoToDelete, setPedidoToDelete] = useState<string | null>(null);
   const itemsPerPage = 20;
 
-  // Verificación temprana: si no hay usuario o no es minorista/mayorista, mostrar mensaje
-  if (!user || (user.rol !== 'minorista' && user.rol !== 'mayorista')) {
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-96">
-          <p className="text-muted-foreground">No tienes permisos para acceder a esta página</p>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
   // Obtener preregistros según el rol
   const { data: preregistros = [], isLoading: loadingPreregistros } = useQuery({
     queryKey: ['preregistros', user?.rol, user?.id],
@@ -167,7 +156,7 @@ export default function Pedidos() {
 
   // Obtener pedidos
   const { data: pedidos = [], isLoading } = useQuery({
-    queryKey: ['pedidos', user.id, estadoFilter],
+    queryKey: ['pedidos', user?.id, estadoFilter],
     queryFn: async () => {
       const estado = estadoFilter === 'todos' ? undefined : estadoFilter;
       return await pedidosService.getAll(user.id);
@@ -434,6 +423,17 @@ export default function Pedidos() {
         return <Badge variant="outline">{estado}</Badge>;
     }
   };
+
+  // Verificación de permisos: si no hay usuario o no es minorista/mayorista, mostrar mensaje
+  if (!user || (user.rol !== 'minorista' && user.rol !== 'mayorista')) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-96">
+          <p className="text-muted-foreground">No tienes permisos para acceder a esta página</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
