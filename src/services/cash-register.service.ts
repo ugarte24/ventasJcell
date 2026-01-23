@@ -23,9 +23,14 @@ export const cashRegisterService = {
         if (error.code === 'PGRST116' || error.code === '406' || error.message?.includes('Not Acceptable')) {
           return null;
         }
-        // Si es un error 400, puede ser un problema de sintaxis o RLS
-        if (error.code === '400' || error.message?.includes('Bad Request')) {
-          console.warn('Error 400 al obtener arqueo abierto, intentando sin filtro de estado:', error);
+        // Si es un error 400 o si menciona que la columna no existe, usar fallback
+        const isColumnError = error.message?.includes('does not exist') || 
+                             error.message?.includes('column') ||
+                             error.code === '400' || 
+                             error.message?.includes('Bad Request');
+        
+        if (isColumnError) {
+          console.warn('Error al obtener arqueo con filtro de estado, intentando sin filtro:', error.message);
           // Intentar sin filtro de estado como fallback
           const { data: fallbackData, error: fallbackError } = await supabase
             .from('arqueos_caja')
@@ -38,12 +43,24 @@ export const cashRegisterService = {
             if (fallbackError.code === 'PGRST116' || fallbackError.code === '406') {
               return null;
             }
+            // Si el error también menciona columna, retornar null silenciosamente
+            if (fallbackError.message?.includes('does not exist') || fallbackError.code === '400') {
+              console.warn('Error persistente al obtener arqueo:', fallbackError.message);
+              return null;
+            }
             throw new Error(handleSupabaseError(fallbackError));
           }
           
-          // Filtrar manualmente por estado
-          if (fallbackData && fallbackData.estado === 'abierto') {
-            return fallbackData as CashRegister;
+          // Filtrar manualmente por estado si existe la propiedad
+          if (fallbackData) {
+            // Si el objeto tiene estado, filtrar por él
+            if ('estado' in fallbackData && fallbackData.estado === 'abierto') {
+              return fallbackData as CashRegister;
+            }
+            // Si no tiene estado pero no tiene hora_cierre, asumir que está abierto
+            if (!('estado' in fallbackData) && !fallbackData.hora_cierre) {
+              return fallbackData as CashRegister;
+            }
           }
           return null;
         }
