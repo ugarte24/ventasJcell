@@ -190,6 +190,7 @@ ventacontrol-pro/
 - `/preregistros/mayorista` - Preregistros de mayoristas
 - `/pedidos` - Mis pedidos (minoristas/mayoristas)
 - `/escanear-qr` - Escanear QR para transferencias (minoristas)
+- `/perfil` - Mi perfil (cambiar contraseña)
 
 ## 🔐 Roles y Permisos
 
@@ -213,6 +214,7 @@ ventacontrol-pro/
 - Editar manualmente el monto aumentado en el registro diario
 - Aumentar saldo de servicios
 - Ver historial de servicios
+- Cambiar su propia contraseña
 - **No puede**: gestionar productos, usuarios, crear/editar/eliminar servicios, ver reportes generales o eximir intereses
 
 ## 📊 Estado Actual del Proyecto
@@ -575,6 +577,13 @@ El sistema implementa un manejo robusto de fechas para evitar problemas de zona 
     - Sistema de persistencia con localStorage para saldos restantes
     - Limpieza automática de datos guardados después de completar ventas
 
-**Versión**: 2.23.0  
+- ✅ **Mejoras en v2.24.0 - Gestión de Perfil:**
+  - ✅ **Página de perfil**: Nueva página `/perfil` donde todos los usuarios pueden ver su información y cambiar su contraseña
+  - ✅ **Cambio de contraseña**: Todos los usuarios (no solo administradores) pueden cambiar su propia contraseña desde la página de perfil
+  - ✅ **Seguridad**: Validación de que solo se puede cambiar la contraseña propia, no la de otros usuarios
+  - ✅ **Interfaz mejorada**: Formulario con validación, confirmación de contraseña y opción para mostrar/ocultar contraseña
+  - ✅ **Acceso fácil**: Enlace "Mi Perfil" agregado en el sidebar para acceso rápido
+
+**Versión**: 2.24.0  
 **Última actualización**: Enero 2026  
-**Estado**: Sistema completo con Preregistros, Roles Minorista/Mayorista, Gestión de Precios Mejorada, Sistema de Arqueos Diferenciado, Optimizaciones de Rendimiento y Persistencia de Saldos - En producción
+**Estado**: Sistema completo con Preregistros, Roles Minorista/Mayorista, Gestión de Precios Mejorada, Sistema de Arqueos Diferenciado, Optimizaciones de Rendimiento, Persistencia de Saldos y Gestión de Perfil - En producción
