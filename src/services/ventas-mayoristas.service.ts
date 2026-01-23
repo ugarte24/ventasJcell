@@ -115,10 +115,20 @@ export const ventasMayoristasService = {
       .single();
 
     if (error) {
+      // Log detallado del error
+      console.error('Error al insertar en ventas_mayoristas:', {
+        error,
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        ventaData,
+      });
+      
       // Mejorar el mensaje de error para 403
-      if (error.code === '42501' || error.message?.includes('permission') || error.message?.includes('403')) {
+      if (error.code === '42501' || error.code === 'PGRST403' || error.message?.includes('permission') || error.message?.includes('403') || error.message?.includes('row-level security')) {
         console.error('Error 403 al insertar en ventas_mayoristas:', error);
-        throw new Error('No tienes permisos para crear registros en ventas_mayoristas. Verifica que seas administrador y que tu cuenta esté activa.');
+        throw new Error('No tienes permisos para crear registros en ventas_mayoristas. Verifica que seas mayorista activo o administrador.');
       }
       throw new Error(handleSupabaseError(error));
     }

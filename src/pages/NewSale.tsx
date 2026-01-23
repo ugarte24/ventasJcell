@@ -444,20 +444,35 @@ export default function NewSale() {
           }
         } else if (user.rol === 'mayorista') {
           // Crear registros en ventas_mayoristas para cada producto vendido
-          for (const item of itemsConVenta) {
-            const cantidadVendida = item.cantidad + item.aumento - item.cantidadRestante;
-            if (cantidadVendida > 0) {
-              await ventasMayoristasService.create({
-                id_mayorista: user.id,
-                id_producto: item.id_producto,
-                cantidad_vendida: cantidadVendida,
-                cantidad_aumento: 0, // Los aumentos ya están registrados cuando se entregan pedidos
-                precio_por_mayor: item.precio_unitario,
-                fecha: fechaActual,
-                hora: horaActual,
-                observaciones: `Venta registrada desde preregistros - Venta #${newSale.id}`,
-              });
+          try {
+            for (const item of itemsConVenta) {
+              const cantidadVendida = item.cantidad + item.aumento - item.cantidadRestante;
+              if (cantidadVendida > 0) {
+                console.log('Creando registro en ventas_mayoristas:', {
+                  id_mayorista: user.id,
+                  id_producto: item.id_producto,
+                  cantidad_vendida: cantidadVendida,
+                  precio_por_mayor: item.precio_unitario,
+                });
+                
+                const ventaMayorista = await ventasMayoristasService.create({
+                  id_mayorista: user.id,
+                  id_producto: item.id_producto,
+                  cantidad_vendida: cantidadVendida,
+                  cantidad_aumento: 0, // Los aumentos ya están registrados cuando se entregan pedidos
+                  precio_por_mayor: item.precio_unitario,
+                  fecha: fechaActual,
+                  hora: horaActual,
+                  observaciones: `Venta registrada desde preregistros - Venta #${newSale.id}`,
+                });
+                
+                console.log('Registro creado exitosamente en ventas_mayoristas:', ventaMayorista);
+              }
             }
+          } catch (error: any) {
+            console.error('Error al crear registros en ventas_mayoristas:', error);
+            toast.error(`Error al registrar ventas mayoristas: ${error.message || 'Error desconocido'}`);
+            // No retornar aquí, permitir que continúe el flujo
           }
         }
 
