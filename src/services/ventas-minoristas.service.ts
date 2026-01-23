@@ -114,7 +114,14 @@ export const ventasMinoristasService = {
       .select()
       .single();
 
-    if (error) throw new Error(handleSupabaseError(error));
+    if (error) {
+      // Mejorar el mensaje de error para 403
+      if (error.code === '42501' || error.message?.includes('permission') || error.message?.includes('403')) {
+        console.error('Error 403 al insertar en ventas_minoristas:', error);
+        throw new Error('No tienes permisos para crear registros en ventas_minoristas. Verifica que seas administrador y que tu cuenta esté activa.');
+      }
+      throw new Error(handleSupabaseError(error));
+    }
 
     // Cargar datos relacionados
     const [minorista, producto] = await Promise.all([
