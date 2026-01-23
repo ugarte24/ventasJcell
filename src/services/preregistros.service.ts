@@ -37,7 +37,7 @@ export const preregistrosService = {
       query = query.eq('id_minorista', idMinorista);
     }
 
-    const { data, error } = await query.order('created_at', { ascending: false });
+    const { data, error } = await query.order('created_at', { ascending: true });
 
     if (error) throw new Error(handleSupabaseError(error));
 
@@ -254,7 +254,7 @@ export const preregistrosService = {
       query = query.eq('id_mayorista', idMayorista);
     }
 
-    const { data, error } = await query.order('created_at', { ascending: false });
+    const { data, error } = await query.order('created_at', { ascending: true });
 
     if (error) throw new Error(handleSupabaseError(error));
 

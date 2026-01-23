@@ -172,13 +172,21 @@ export default function NewSale() {
           const items: PreregistroVentaItem[] = preregistros.map(p => {
             const aumento = aumentosPorProducto.get(p.id_producto) || 0;
             const saldoDisponible = p.cantidad + aumento;
+            
+            // Intentar cargar saldo restante guardado desde localStorage
+            const storageKey = `preregistro_saldo_${user.id}_${p.id}`;
+            const saldoGuardado = localStorage.getItem(storageKey);
+            const cantidadRestante = saldoGuardado !== null 
+              ? Math.max(0, Math.min(parseInt(saldoGuardado), saldoDisponible))
+              : saldoDisponible;
+            
             return {
               id: p.id,
               nombre: p.producto?.nombre || 'N/A',
               codigo: p.producto?.codigo,
               cantidad: p.cantidad,
               aumento: aumento, // Aumentos del día desde ventas_minoristas
-              cantidadRestante: saldoDisponible, // Inicialmente igual a saldo disponible
+              cantidadRestante: cantidadRestante, // Usar saldo guardado o saldo disponible
               precio_unitario: p.producto?.precio_por_unidad || 0,
               subtotal: 0,
               id_producto: p.id_producto,
@@ -216,13 +224,21 @@ export default function NewSale() {
           const items: PreregistroVentaItem[] = preregistros.map(p => {
             const aumento = aumentosPorProducto.get(p.id_producto) || 0;
             const saldoDisponible = p.cantidad + aumento; // TODO: Sumar saldos arrastrados del último arqueo
+            
+            // Intentar cargar saldo restante guardado desde localStorage
+            const storageKey = `preregistro_saldo_${user.id}_${p.id}`;
+            const saldoGuardado = localStorage.getItem(storageKey);
+            const cantidadRestante = saldoGuardado !== null 
+              ? Math.max(0, Math.min(parseInt(saldoGuardado), saldoDisponible))
+              : saldoDisponible;
+            
             return {
               id: p.id,
               nombre: p.producto?.nombre || 'N/A',
               codigo: p.producto?.codigo,
               cantidad: p.cantidad,
               aumento: aumento, // Aumentos del día desde ventas_mayoristas
-              cantidadRestante: saldoDisponible, // Inicialmente igual a saldo disponible
+              cantidadRestante: cantidadRestante, // Usar saldo guardado o saldo disponible
               precio_unitario: p.producto?.precio_por_mayor ?? 0,
               subtotal: 0,
               id_producto: p.id_producto,
@@ -252,7 +268,15 @@ export default function NewSale() {
       if (item.id === itemId) {
         const cantidadRestante = Math.max(0, Math.min(newValue, item.cantidad + item.aumento));
         const subtotal = (item.cantidad + item.aumento - cantidadRestante) * item.precio_unitario;
-        return { ...item, cantidadRestante, subtotal };
+        const updatedItem = { ...item, cantidadRestante, subtotal };
+        
+        // Guardar en localStorage para persistir los cambios
+        if (user) {
+          const storageKey = `preregistro_saldo_${user.id}_${itemId}`;
+          localStorage.setItem(storageKey, cantidadRestante.toString());
+        }
+        
+        return updatedItem;
       }
       return item;
     }));
@@ -495,12 +519,17 @@ export default function NewSale() {
           }
         }
         
-        // Limpiar preregistros procesados
+        // Actualizar preregistros procesados y localStorage
         setPreregistroItems(prev => prev.map(item => {
           const cantidadVendida = item.cantidad + item.aumento - item.cantidadRestante;
           if (cantidadVendida > 0) {
-            // Actualizar cantidadRestante a la nueva cantidad total (cantidad + aumento)
-            return { ...item, cantidadRestante: item.cantidad + item.aumento, subtotal: 0 };
+            // Actualizar el saldo guardado en localStorage con el nuevo saldo restante
+            const storageKey = `preregistro_saldo_${user.id}_${item.id}`;
+            // El saldo restante actual ya es correcto, solo actualizamos el subtotal
+            localStorage.setItem(storageKey, item.cantidadRestante.toString());
+            
+            // Mantener el saldo restante actual y resetear el subtotal
+            return { ...item, subtotal: 0 };
           }
           return item;
         }));

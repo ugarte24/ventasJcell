@@ -567,6 +567,14 @@ El sistema implementa un manejo robusto de fechas para evitar problemas de zona 
     - Formulario de agregar producto arriba, tabla de productos abajo
     - Mejor organización y flujo de trabajo
 
-**Versión**: 2.22.0  
+- ✅ **Mejoras en v2.23.0 - Persistencia y Ordenamiento:**
+  - ✅ **Ordenamiento de productos en preregistros**: Los productos ahora se muestran en el orden cronológico de registro (primero registrado, primero en la lista) tanto para mayoristas como para minoristas
+  - ✅ **Persistencia del saldo restante**: El saldo restante modificado manualmente en "Nueva Venta" se guarda automáticamente en localStorage y persiste al salir y volver a entrar a la página. Los cambios se mantienen hasta completar una venta o modificarlos nuevamente
+  - ✅ **Mejoras técnicas**:
+    - Ordenamiento ascendente por `created_at` en consultas de preregistros
+    - Sistema de persistencia con localStorage para saldos restantes
+    - Limpieza automática de datos guardados después de completar ventas
+
+**Versión**: 2.23.0  
 **Última actualización**: Enero 2026  
-**Estado**: Sistema completo con Preregistros, Roles Minorista/Mayorista, Gestión de Precios Mejorada, Sistema de Arqueos Diferenciado y Optimizaciones de Rendimiento - En producción
+**Estado**: Sistema completo con Preregistros, Roles Minorista/Mayorista, Gestión de Precios Mejorada, Sistema de Arqueos Diferenciado, Optimizaciones de Rendimiento y Persistencia de Saldos - En producción
