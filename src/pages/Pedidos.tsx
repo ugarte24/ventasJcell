@@ -158,10 +158,11 @@ export default function Pedidos() {
   const { data: pedidos = [], isLoading } = useQuery({
     queryKey: ['pedidos', user?.id, estadoFilter],
     queryFn: async () => {
+      if (!user) return [];
       const estado = estadoFilter === 'todos' ? undefined : estadoFilter;
       return await pedidosService.getAll(user.id);
     },
-    enabled: !!user,
+    enabled: !!user && (user?.rol === 'minorista' || user?.rol === 'mayorista'),
   });
 
   // Filtrar por estado
