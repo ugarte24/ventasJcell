@@ -22,6 +22,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -75,6 +85,9 @@ export default function AdminPedidos() {
   const [selectedPedido, setSelectedPedido] = useState<Pedido | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
+  const [showEntregadoDialog, setShowEntregadoDialog] = useState(false);
+  const [showCancelarDialog, setShowCancelarDialog] = useState(false);
+  const [pedidoToAction, setPedidoToAction] = useState<string | null>(null);
 
   // Solo administradores pueden acceder
   useEffect(() => {
@@ -168,14 +181,28 @@ export default function AdminPedidos() {
   };
 
   const handleMarcarEntregado = (id: string) => {
-    if (confirm('¿Estás seguro de que deseas marcar este pedido como entregado? Esto actualizará los preregistros del usuario.')) {
-      marcarEntregadoMutation.mutate(id);
+    setPedidoToAction(id);
+    setShowEntregadoDialog(true);
+  };
+
+  const handleConfirmarEntregado = () => {
+    if (pedidoToAction) {
+      marcarEntregadoMutation.mutate(pedidoToAction);
+      setShowEntregadoDialog(false);
+      setPedidoToAction(null);
     }
   };
 
   const handleCancelarPedido = (id: string) => {
-    if (confirm('¿Estás seguro de que deseas cancelar este pedido?')) {
-      cancelarPedidoMutation.mutate(id);
+    setPedidoToAction(id);
+    setShowCancelarDialog(true);
+  };
+
+  const handleConfirmarCancelar = () => {
+    if (pedidoToAction) {
+      cancelarPedidoMutation.mutate(pedidoToAction);
+      setShowCancelarDialog(false);
+      setPedidoToAction(null);
     }
   };
 
@@ -545,6 +572,64 @@ export default function AdminPedidos() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Diálogo de confirmación para marcar como entregado */}
+      <AlertDialog open={showEntregadoDialog} onOpenChange={setShowEntregadoDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Marcar como Entregado?</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Estás seguro de que deseas marcar este pedido como entregado? Esto actualizará los preregistros del usuario.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPedidoToAction(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmarEntregado}
+              className="bg-success text-success-foreground hover:bg-success/90"
+              disabled={marcarEntregadoMutation.isPending}
+            >
+              {marcarEntregadoMutation.isPending ? (
+                <>
+                  <Loader className="h-4 w-4 mr-2 animate-spin" />
+                  Procesando...
+                </>
+              ) : (
+                'Aceptar'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Diálogo de confirmación para cancelar pedido */}
+      <AlertDialog open={showCancelarDialog} onOpenChange={setShowCancelarDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Cancelar Pedido?</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Estás seguro de que deseas cancelar este pedido? Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPedidoToAction(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmarCancelar}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={cancelarPedidoMutation.isPending}
+            >
+              {cancelarPedidoMutation.isPending ? (
+                <>
+                  <Loader className="h-4 w-4 mr-2 animate-spin" />
+                  Procesando...
+                </>
+              ) : (
+                'Confirmar Cancelación'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }

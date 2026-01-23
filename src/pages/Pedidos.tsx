@@ -22,6 +22,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -101,6 +111,8 @@ export default function Pedidos() {
   const [detallesPedido, setDetallesPedido] = useState<Array<{ id_producto: string; cantidad: number; nombre: string }>>([]);
   const [observaciones, setObservaciones] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [pedidoToDelete, setPedidoToDelete] = useState<string | null>(null);
   const itemsPerPage = 20;
 
   // Obtener preregistros según el rol
@@ -384,8 +396,15 @@ export default function Pedidos() {
   };
 
   const handleDeletePedido = (id: string) => {
-    if (confirm('¿Estás seguro de que deseas eliminar este pedido?')) {
-      deletePedidoMutation.mutate(id);
+    setPedidoToDelete(id);
+    setShowDeleteDialog(true);
+  };
+
+  const handleConfirmarEliminar = () => {
+    if (pedidoToDelete) {
+      deletePedidoMutation.mutate(pedidoToDelete);
+      setShowDeleteDialog(false);
+      setPedidoToDelete(null);
     }
   };
 
@@ -1032,6 +1051,35 @@ export default function Pedidos() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Diálogo de confirmación para eliminar pedido */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar Pedido?</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Estás seguro de que deseas eliminar este pedido? Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPedidoToDelete(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmarEliminar}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deletePedidoMutation.isPending}
+            >
+              {deletePedidoMutation.isPending ? (
+                <>
+                  <Loader className="h-4 w-4 mr-2 animate-spin" />
+                  Eliminando...
+                </>
+              ) : (
+                'Eliminar'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }
