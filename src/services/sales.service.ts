@@ -35,8 +35,10 @@ export const salesService = {
           cantidad,
           precio_unitario,
           subtotal,
-          productos (
-            nombre
+          productos!inner (
+            id,
+            nombre,
+            codigo
           )
         )
       `)
@@ -54,7 +56,78 @@ export const salesService = {
 
     const { data, error } = await query;
 
-    if (error) throw new Error(handleSupabaseError(error));
+    if (error) {
+      // Si hay error con la relación, intentar sin la relación y obtener productos después
+      console.warn('Error al obtener ventas con relación de productos:', error);
+      
+      // Consulta alternativa sin relación
+      let fallbackQuery = supabase
+        .from('ventas')
+        .select(`
+          *,
+          detalle_venta (
+            id,
+            id_producto,
+            cantidad,
+            precio_unitario,
+            subtotal
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (filters?.fechaDesde) {
+        fallbackQuery = fallbackQuery.gte('fecha', filters.fechaDesde);
+      }
+      if (filters?.fechaHasta) {
+        fallbackQuery = fallbackQuery.lte('fecha', filters.fechaHasta);
+      }
+      if (filters?.id_vendedor) {
+        fallbackQuery = fallbackQuery.eq('id_vendedor', filters.id_vendedor);
+      }
+
+      const { data: fallbackData, error: fallbackError } = await fallbackQuery;
+      
+      if (fallbackError) throw new Error(handleSupabaseError(fallbackError));
+      
+      // Obtener todos los IDs de productos únicos
+      const productIds = new Set<string>();
+      (fallbackData as any[]).forEach(sale => {
+        (sale.detalle_venta || []).forEach((detalle: any) => {
+          if (detalle.id_producto) {
+            productIds.add(detalle.id_producto);
+          }
+        });
+      });
+
+      // Obtener productos
+      if (productIds.size > 0) {
+        const { data: productosData } = await supabase
+          .from('productos')
+          .select('id, nombre, codigo')
+          .in('id', Array.from(productIds));
+
+        const productosMap = new Map((productosData || []).map((p: any) => [p.id, p]));
+
+        // Enriquecer los detalles con los productos
+        (fallbackData as any[]).forEach(sale => {
+          (sale.detalle_venta || []).forEach((detalle: any) => {
+            if (detalle.id_producto) {
+              detalle.productos = productosMap.get(detalle.id_producto) || null;
+            }
+          });
+        });
+      }
+
+      // Calcular saldo_pendiente para ventas a crédito
+      const salesWithBalance = (fallbackData as any[]).map(sale => {
+        if (sale.metodo_pago === 'credito' && sale.monto_pagado !== null) {
+          sale.saldo_pendiente = parseFloat(sale.total) - parseFloat(sale.monto_pagado || 0);
+        }
+        return sale;
+      });
+      
+      return salesWithBalance;
+    }
     
     // Calcular saldo_pendiente para ventas a crédito
     const salesWithBalance = (data as any[]).map(sale => {
@@ -357,8 +430,18 @@ export const salesService = {
       .insert(detallesConFecha);
     
     if (detallesError) {
+      console.error('Error al crear detalles de venta:', detallesError);
+      console.error('Detalles a insertar:', detallesConFecha);
+      console.error('ID de venta:', venta.id);
+      
       // Si falla, eliminar la venta creada
       await supabase.from('ventas').delete().eq('id', venta.id);
+      
+      // Proporcionar un mensaje más descriptivo
+      if (detallesError.code === '42501' || detallesError.code === 'PGRST403' || detallesError.message?.includes('403') || detallesError.message?.includes('permission')) {
+        throw new Error('No tienes permisos para crear detalles de venta. Verifica que estés autenticado y que la venta pertenezca a tu usuario.');
+      }
+      
       throw new Error(`Error al crear detalles de venta: ${handleSupabaseError(detallesError)}`);
     }
 

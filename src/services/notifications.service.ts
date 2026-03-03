@@ -25,7 +25,7 @@ export interface NotificationData {
 class NotificationService {
   private permission: NotificationPermission = 'default';
   private isSupported: boolean;
-  private readonly STORAGE_KEY = 'ventaplus_notifications_enabled';
+  private readonly STORAGE_KEY = 'ventasjcell_notifications_enabled';
 
   constructor() {
     this.isSupported = 'Notification' in window && 'serviceWorker' in navigator;

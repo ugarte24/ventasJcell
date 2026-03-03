@@ -43,14 +43,14 @@ export const inventoryMovementsService = {
     let query = supabase
       .from('movimientos_inventario')
       .select('*')
-      .order('fecha', { ascending: false })
       .order('created_at', { ascending: false });
 
+    // Filtrar por created_at (la columna fecha puede no existir aún)
     if (filters?.fechaDesde) {
-      query = query.gte('fecha', filters.fechaDesde);
+      query = query.gte('created_at', `${filters.fechaDesde}T00:00:00.000Z`);
     }
     if (filters?.fechaHasta) {
-      query = query.lte('fecha', filters.fechaHasta);
+      query = query.lte('created_at', `${filters.fechaHasta}T23:59:59.999Z`);
     }
     if (filters?.id_producto) {
       query = query.eq('id_producto', filters.id_producto);
@@ -116,12 +116,20 @@ export const inventoryMovementsService = {
       }
     }
 
-    // Transformar los datos agregando las relaciones
-    return data.map((item: any) => ({
-      ...item,
-      producto: productsMap.get(item.id_producto),
-      usuario: item.id_usuario ? usersMap.get(item.id_usuario) : undefined,
-    })) as InventoryMovement[];
+    // Transformar los datos agregando las relaciones y asegurar que fecha exista
+    return data.map((item: any) => {
+      // Si no tiene fecha, extraerla de created_at
+      if (!item.fecha && item.created_at) {
+        const date = new Date(item.created_at);
+        item.fecha = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      }
+      
+      return {
+        ...item,
+        producto: productsMap.get(item.id_producto),
+        usuario: item.id_usuario ? usersMap.get(item.id_usuario) : undefined,
+      };
+    }) as InventoryMovement[];
   },
 
   async getById(id: string): Promise<InventoryMovement | null> {
@@ -219,19 +227,26 @@ export const inventoryMovementsService = {
     const createdAt = getLocalDateTimeISO();
     
     // Crear el movimiento
+    // Construir el objeto de inserción sin fecha primero (por si la columna no existe)
+    const insertData: any = {
+      id_producto: movementData.id_producto,
+      tipo_movimiento: movementData.tipo_movimiento,
+      cantidad: movementData.cantidad,
+      motivo: movementData.motivo,
+      id_usuario: movementData.id_usuario || null,
+      observacion: movementData.observacion || null,
+      estado: 'activo',
+      created_at: createdAt, // Timestamp explícito en hora local
+    };
+    
+    // Solo agregar fecha si se proporciona (la columna puede no existir aún)
+    if (fecha) {
+      insertData.fecha = fecha;
+    }
+    
     const { data, error } = await supabase
       .from('movimientos_inventario')
-      .insert({
-        id_producto: movementData.id_producto,
-        tipo_movimiento: movementData.tipo_movimiento,
-        cantidad: movementData.cantidad,
-        motivo: movementData.motivo,
-        fecha: fecha,
-        id_usuario: movementData.id_usuario || null,
-        observacion: movementData.observacion || null,
-        estado: 'activo',
-        created_at: createdAt, // Timestamp explícito en hora local
-      })
+      .insert(insertData)
       .select('*')
       .single();
 

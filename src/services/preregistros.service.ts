@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { PreregistroMinorista, PreregistroMayorista, Product } from '@/types';
 import { handleSupabaseError } from '@/lib/error-handler';
-import { getLocalDateTimeISO, getLocalDateISO } from '@/lib/utils';
+import { getLocalDateTimeISO } from '@/lib/utils';
 import { productsService } from './products.service';
 import { usersService } from './users.service';
 
@@ -221,13 +221,8 @@ export const preregistrosService = {
   // PREREGISTROS MAYORISTA
   // ============================================================================
 
-  async getPreregistrosMayorista(
-    idMayorista?: string,
-    fecha?: string
-  ): Promise<PreregistroMayorista[]> {
-    const fechaBusqueda = fecha || getLocalDateISO();
-    
-    // Usar JOINs de Supabase para obtener todos los datos en una sola query
+  async getPreregistrosMayorista(idMayorista?: string): Promise<PreregistroMayorista[]> {
+    // Sin filtrar por fecha: preregistros reutilizables (igual que minorista)
     let query = supabase
       .from('preregistros_mayorista')
       .select(`
@@ -247,8 +242,7 @@ export const preregistrosService = {
           usuario,
           estado
         )
-      `)
-      .eq('fecha', fechaBusqueda);
+      `);
 
     if (idMayorista) {
       query = query.eq('id_mayorista', idMayorista);
@@ -269,20 +263,17 @@ export const preregistrosService = {
   async createPreregistroMayorista(
     idMayorista: string,
     idProducto: string,
-    cantidad: number,
-    fecha?: string
+    cantidad: number
   ): Promise<PreregistroMayorista> {
-    const fechaRegistro = fecha || getLocalDateISO();
     const createdAt = getLocalDateTimeISO();
     const updatedAt = getLocalDateTimeISO();
 
-    // Verificar si ya existe un preregistro para este mayorista y producto en esta fecha
+    // Verificar si ya existe un preregistro para este mayorista y producto (reutilizable, sin fecha)
     const { data: existing } = await supabase
       .from('preregistros_mayorista')
       .select('id')
       .eq('id_mayorista', idMayorista)
       .eq('id_producto', idProducto)
-      .eq('fecha', fechaRegistro)
       .maybeSingle();
 
     if (existing) {
@@ -332,14 +323,13 @@ export const preregistrosService = {
       } as PreregistroMayorista;
     }
 
-    // Crear nuevo preregistro
+    // Crear nuevo preregistro (sin fecha, reutilizable como minorista)
     const { data, error } = await supabase
       .from('preregistros_mayorista')
       .insert({
         id_mayorista: idMayorista,
         id_producto: idProducto,
         cantidad,
-        fecha: fechaRegistro,
         created_at: createdAt,
         updated_at: updatedAt,
       })

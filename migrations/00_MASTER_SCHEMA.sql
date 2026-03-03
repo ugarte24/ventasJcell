@@ -1,7 +1,7 @@
 -- ============================================================================
--- VENTAPLUS - SCRIPT SQL MAESTRO PARA DUPLICACIÓN DEL SISTEMA
+-- ventasjcell - SCRIPT SQL MAESTRO PARA DUPLICACIÓN DEL SISTEMA
 -- ============================================================================
--- Este script crea toda la estructura de base de datos necesaria para VentaPlus
+-- Este script crea toda la estructura de base de datos necesaria para ventasjcell
 -- Ejecutar este script en un proyecto nuevo de Supabase para duplicar el sistema
 -- 
 -- ORDEN DE EJECUCIÓN:

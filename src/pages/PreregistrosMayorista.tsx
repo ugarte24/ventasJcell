@@ -40,9 +40,6 @@ import { preregistrosService } from '@/services/preregistros.service';
 import { PreregistroMayorista } from '@/types';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { getLocalDateISO } from '@/lib/utils';
-import { DatePicker } from '@/components/ui/date-picker';
-
 export default function PreregistrosMayorista() {
   const { data: products = [] } = useProducts();
   const { data: users = [] } = useUsers();
@@ -52,7 +49,6 @@ export default function PreregistrosMayorista() {
   const [selectedMayorista, setSelectedMayorista] = useState<string>('');
   const [mayoristaSearchOpen, setMayoristaSearchOpen] = useState(false);
   const [mayoristaSearchTerm, setMayoristaSearchTerm] = useState('');
-  const [fecha, setFecha] = useState<string>(getLocalDateISO());
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [editingPreregistro, setEditingPreregistro] = useState<PreregistroMayorista | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -106,7 +102,7 @@ export default function PreregistrosMayorista() {
   const loadPreregistros = async () => {
     try {
       setIsLoading(true);
-      const data = await preregistrosService.getPreregistrosMayorista(undefined, fecha);
+      const data = await preregistrosService.getPreregistrosMayorista(undefined);
       setPreregistros(data);
     } catch (error: any) {
       toast.error(error.message || 'Error al cargar preregistros');
@@ -117,7 +113,7 @@ export default function PreregistrosMayorista() {
 
   useEffect(() => {
     loadPreregistros();
-  }, [fecha]);
+  }, []);
 
   const handleCreate = async () => {
     if (!selectedMayorista) {
@@ -160,7 +156,7 @@ export default function PreregistrosMayorista() {
   // Cargar preregistros de un mayorista específico
   const loadPreregistrosDelMayorista = async (idMayorista: string) => {
     try {
-      const data = await preregistrosService.getPreregistrosMayorista(idMayorista, fecha);
+      const data = await preregistrosService.getPreregistrosMayorista(idMayorista);
       setPreregistrosDelMayorista(data);
     } catch (error: any) {
       toast.error(error.message || 'Error al cargar productos');
@@ -183,8 +179,7 @@ export default function PreregistrosMayorista() {
       await preregistrosService.createPreregistroMayorista(
         selectedMayoristaForManage,
         newProductForManage,
-        cantidadNum,
-        fecha
+        cantidadNum
       );
       toast.success('Producto agregado exitosamente');
       setNewProductForManage('');
@@ -258,12 +253,12 @@ export default function PreregistrosMayorista() {
     }
   };
 
-  // Actualizar productos del mayorista cuando cambia la fecha o se cierra el diálogo de edición
+  // Actualizar productos del mayorista cuando se cierra el diálogo de edición
   useEffect(() => {
     if (selectedMayoristaForManage && isManageDialogOpen) {
       loadPreregistrosDelMayorista(selectedMayoristaForManage);
     }
-  }, [fecha, selectedMayoristaForManage, isManageDialogOpen]);
+  }, [selectedMayoristaForManage, isManageDialogOpen]);
 
   useEffect(() => {
     if (!isEditDialogOpen && editingPreregistro === null && selectedMayoristaForManage) {
@@ -277,21 +272,11 @@ export default function PreregistrosMayorista() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Preregistros del Día</CardTitle>
-              <div className="flex items-center gap-2">
-                <Label htmlFor="fecha">Fecha:</Label>
-                <DatePicker
-                  id="fecha"
-                  value={fecha}
-                  onChange={setFecha}
-                  placeholder="dd/mm/yyyy"
-                  className="w-auto"
-                />
-                <Button onClick={() => setIsDialogOpen(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Nuevo Preregistro
-                </Button>
-              </div>
+              <CardTitle>Preregistros Mayorista</CardTitle>
+              <Button onClick={() => setIsDialogOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Nuevo Preregistro
+              </Button>
             </div>
           </CardHeader>
           <CardContent>
@@ -301,7 +286,7 @@ export default function PreregistrosMayorista() {
               </div>
             ) : mayoristasUnicos.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                No hay preregistros para esta fecha
+                No hay preregistros
               </div>
             ) : (
               <Table>

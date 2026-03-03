@@ -38,7 +38,7 @@ function getSupabaseClient(): SupabaseClient<Database> {
     },
     global: {
       headers: {
-        'x-client-info': 'ventaplus@1.0.0',
+        'x-client-info': 'ventasjcell@1.0.0',
       },
     },
   });

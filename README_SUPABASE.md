@@ -1,8 +1,8 @@
-# Integración Supabase - VentaPlus
+# Integración Supabase - ventasjcell
 
 ## Estado de la Integración
 
-La integración de Supabase con VentaPlus ha sido completada en su mayoría. Aquí está el resumen:
+La integración de Supabase con ventasjcell ha sido completada en su mayoría. Aquí está el resumen:
 
 ### ✅ Completado
 

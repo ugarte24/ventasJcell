@@ -264,6 +264,24 @@ Si encuentras problemas durante la migración:
 2. Verificar que todos los scripts se ejecutaron en orden
 3. Consultar el documento `PLAN_MEJORA_MINORISTAS_MAYORISTAS.md` para más detalles
 
+## 📌 Migración Adicional: Preregistros Mayorista Reutilizables
+
+**Archivo:** `update_preregistros_mayorista_structure.sql`
+
+Esta migración hace que los preregistros de mayoristas funcionen igual que los de minoristas (reutilizables todos los días).
+
+**Cambios:**
+- Elimina la columna `fecha` de `preregistros_mayorista`
+- Actualiza el constraint UNIQUE a `(id_mayorista, id_producto)`
+- Consolida registros duplicados (mantiene el más reciente por fecha)
+
+**Cuándo ejecutar:** Después de las migraciones principales de minoristas/mayoristas.
+
+```sql
+-- Ejecutar en Supabase SQL Editor
+\i migrations/update_preregistros_mayorista_structure.sql
+```
+
 ---
 
-**Última actualización:** Enero 2026
+**Última actualización:** Marzo 2026

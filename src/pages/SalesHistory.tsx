@@ -644,8 +644,30 @@ export default function SalesHistory() {
                     paginatedSales.map((sale: any) => {
                       const detalles = sale.detalle_venta || [];
                       const primerDetalle = detalles[0];
-                      const producto = primerDetalle?.productos;
-                      const nombreProducto = producto?.nombre || 'N/A';
+                      
+                      // Obtener el nombre del producto
+                      let nombreProducto = 'N/A';
+                      if (primerDetalle) {
+                        // Primero intentar desde la relación productos (si existe)
+                        const productoRelacion = primerDetalle.productos;
+                        if (productoRelacion) {
+                          if (Array.isArray(productoRelacion) && productoRelacion.length > 0) {
+                            nombreProducto = productoRelacion[0]?.nombre || 'N/A';
+                          } else if (typeof productoRelacion === 'object' && productoRelacion !== null && !Array.isArray(productoRelacion)) {
+                            nombreProducto = productoRelacion.nombre || 'N/A';
+                          }
+                        }
+                        
+                        // Si no se encontró desde la relación, usar la lista de productos cargada
+                        if ((nombreProducto === 'N/A' || !nombreProducto) && primerDetalle.id_producto) {
+                          if (products && products.length > 0) {
+                            const productoEncontrado = products.find((p: any) => p.id === primerDetalle.id_producto);
+                            if (productoEncontrado && productoEncontrado.nombre) {
+                              nombreProducto = productoEncontrado.nombre;
+                            }
+                          }
+                        }
+                      }
                       
                       return (
                         <TableRow key={sale.id}>

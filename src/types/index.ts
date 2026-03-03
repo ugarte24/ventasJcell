@@ -106,7 +106,7 @@ export interface PreregistroMayorista {
   id_mayorista: string;
   id_producto: string;
   cantidad: number;
-  fecha: string;
+  fecha?: string; // Opcional: preregistros reutilizables sin fecha (igual que minorista)
   created_at: string;
   updated_at: string;
   // Datos relacionados

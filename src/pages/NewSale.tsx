@@ -200,8 +200,8 @@ export default function NewSale() {
           });
           setPreregistroItems(items);
         } else if (user.rol === 'mayorista') {
-          // Cargar preregistros del mayorista para la fecha actual
-          const preregistros = await preregistrosService.getPreregistrosMayorista(user.id, fechaActual);
+          // Cargar preregistros del mayorista (sin filtrar por fecha, son reutilizables como minorista)
+          const preregistros = await preregistrosService.getPreregistrosMayorista(user.id);
           
           // Cargar aumentos del día desde ventas_mayoristas
           const aumentosDelDia = await ventasMayoristasService.getAumentosDelPeriodo(
@@ -1303,6 +1303,275 @@ export default function NewSale() {
                         </div>
                       </div>
                     )}
+
+                    {/* Payment Method */}
+                    <div className="border-t p-3 sm:p-4">
+                      <p className="mb-2 sm:mb-3 text-xs sm:text-sm font-medium text-muted-foreground">Método de Pago</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {paymentMethods.map((method) => (
+                          <button
+                            key={method.id}
+                            onClick={() => setSelectedPayment(method.id)}
+                            className={cn(
+                              "flex flex-col items-center gap-1 rounded-lg border p-2 sm:p-3 transition-all min-h-[60px] sm:min-h-0",
+                              selectedPayment === method.id
+                                ? "border-primary bg-primary/5 text-primary"
+                                : "border-border hover:border-primary/50"
+                            )}
+                          >
+                            <method.icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                            <span className="text-xs font-medium">{method.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Campos adicionales para crédito */}
+                    {selectedPayment === 'credito' && (
+                      <div className="border-t p-3 sm:p-4 space-y-3">
+                        {/* Selector de Cliente */}
+                        <div className="space-y-2">
+                          <Label className="text-xs sm:text-sm">Cliente *</Label>
+                          <Popover open={clientSearchOpen} onOpenChange={setClientSearchOpen}>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                className="w-full justify-between h-9"
+                              >
+                                {selectedClient ? (
+                                  <span className="truncate">{selectedClient.nombre}</span>
+                                ) : (
+                                  <span className="text-muted-foreground">Seleccionar cliente...</span>
+                                )}
+                                <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                              <Command shouldFilter={false}>
+                                <CommandInput 
+                                  placeholder="Buscar cliente..." 
+                                  value={clientSearchTerm}
+                                  onValueChange={setClientSearchTerm}
+                                />
+                                <CommandList>
+                                  {filteredClients.length === 0 ? (
+                                    <CommandEmpty>No se encontraron clientes.</CommandEmpty>
+                                  ) : (
+                                    <CommandGroup>
+                                      {filteredClients.map((client) => (
+                                        <CommandItem
+                                          key={client.id}
+                                          value={`${client.nombre} ${client.ci_nit || ''}`}
+                                          onSelect={() => {
+                                            setSelectedClient(client);
+                                            setClientSearchOpen(false);
+                                            setClientSearchTerm('');
+                                          }}
+                                          className="group"
+                                        >
+                                          <div className="flex flex-col">
+                                            <span className="font-medium">{client.nombre}</span>
+                                            {client.ci_nit && (
+                                              <span className="text-xs text-muted-foreground group-hover:text-white transition-colors">
+                                                CI/NIT: {client.ci_nit}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                  )}
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+
+                        {/* Cantidad de Cuotas */}
+                        <div className="space-y-2">
+                          <Label className="text-xs sm:text-sm">Cantidad de Cuotas *</Label>
+                          <Input
+                            type="number"
+                            step="1"
+                            min="1"
+                            max="120"
+                            value={mesesCreditoInput}
+                            onChange={(e) => {
+                              const inputValue = e.target.value;
+                              setMesesCreditoInput(inputValue);
+                              
+                              if (inputValue === '' || inputValue === '.') {
+                                setMesesCredito(1);
+                                return;
+                              }
+                              
+                              const numValue = parseInt(inputValue, 10);
+                              if (!isNaN(numValue) && numValue >= 1 && numValue <= 120) {
+                                setMesesCredito(numValue);
+                              }
+                            }}
+                            onBlur={(e) => {
+                              const numValue = parseInt(e.target.value, 10);
+                              if (isNaN(numValue) || numValue < 1) {
+                                setMesesCredito(1);
+                                setMesesCreditoInput('1');
+                              } else if (numValue > 120) {
+                                setMesesCredito(120);
+                                setMesesCreditoInput('120');
+                              } else {
+                                setMesesCreditoInput(e.target.value);
+                              }
+                            }}
+                            placeholder="Ej: 3"
+                            className="h-9"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Número de cuotas para el pago del crédito
+                          </p>
+                        </div>
+
+                        {/* Tasa de Interés Mensual */}
+                        <div className="space-y-2">
+                          <Label className="text-xs sm:text-sm">Tasa de Interés Mensual (%)</Label>
+                          <Input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="100"
+                            value={tasaInteresInput !== '' ? tasaInteresInput : (tasaInteres > 0 ? tasaInteres.toString() : '')}
+                            onChange={(e) => {
+                              const inputValue = e.target.value;
+                              setTasaInteresInput(inputValue);
+                              
+                              if (inputValue === '' || inputValue === '.') {
+                                setTasaInteres(0);
+                                return;
+                              }
+                              
+                              const numValue = parseFloat(inputValue);
+                              if (!isNaN(numValue) && numValue >= 0 && numValue <= 100) {
+                                setTasaInteres(numValue);
+                              }
+                            }}
+                            onBlur={(e) => {
+                              const numValue = parseFloat(e.target.value);
+                              if (isNaN(numValue) || numValue < 0) {
+                                setTasaInteres(0);
+                                setTasaInteresInput('');
+                              } else if (numValue > 100) {
+                                setTasaInteres(100);
+                                setTasaInteresInput('100');
+                              } else {
+                                setTasaInteresInput(e.target.value);
+                              }
+                            }}
+                            placeholder="0.0"
+                            className="h-9"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Se aplicará mensualmente sobre el total original desde la fecha de la venta
+                          </p>
+                        </div>
+
+                        {/* Cuota Inicial */}
+                        <div className="space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id="cuota-inicial-desktop"
+                              checked={cuotaInicialHabilitada}
+                              onCheckedChange={(checked) => {
+                                setCuotaInicialHabilitada(checked === true);
+                                if (!checked) {
+                                  setCuotaInicial(0);
+                                  setCuotaInicialInput('');
+                                }
+                              }}
+                            />
+                            <Label
+                              htmlFor="cuota-inicial-desktop"
+                              className="text-xs sm:text-sm font-normal cursor-pointer"
+                            >
+                              Cuota Inicial
+                            </Label>
+                          </div>
+                          {cuotaInicialHabilitada && (
+                            <div className="space-y-2">
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                max={preregistroTotal}
+                                value={cuotaInicialInput !== '' ? cuotaInicialInput : (cuotaInicial > 0 ? cuotaInicial.toFixed(2) : '')}
+                                onChange={(e) => {
+                                  const inputValue = e.target.value;
+                                  setCuotaInicialInput(inputValue);
+                                  
+                                  if (inputValue === '' || inputValue === '.') {
+                                    setCuotaInicial(0);
+                                    return;
+                                  }
+                                  
+                                  const numValue = parseFloat(inputValue);
+                                  if (!isNaN(numValue) && numValue >= 0 && numValue <= preregistroTotal) {
+                                    setCuotaInicial(numValue);
+                                  }
+                                }}
+                                onBlur={(e) => {
+                                  const numValue = parseFloat(e.target.value);
+                                  if (isNaN(numValue) || numValue < 0) {
+                                    setCuotaInicial(0);
+                                    setCuotaInicialInput('');
+                                  } else if (numValue > preregistroTotal) {
+                                    setCuotaInicial(preregistroTotal);
+                                    setCuotaInicialInput(preregistroTotal.toFixed(2));
+                                  } else {
+                                    setCuotaInicialInput(e.target.value);
+                                  }
+                                }}
+                                placeholder="0.00"
+                                className="h-9"
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                El interés y las cuotas se calcularán sobre: Bs. {(preregistroTotal - cuotaInicial).toFixed(2)}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    <div className="p-3 sm:p-4 space-y-2 border-t">
+                      <Button 
+                        className="w-full h-11 sm:h-12 gap-2 text-sm sm:text-base" 
+                        onClick={handleCompleteSale}
+                        disabled={
+                          preregistroItems.filter(item => 
+                            (item.cantidad + item.aumento - item.cantidadRestante) > 0
+                          ).length === 0 || createSaleMutation.isPending
+                        }
+                      >
+                        {createSaleMutation.isPending ? (
+                          <>
+                            <Loader className="h-5 w-5 animate-spin" />
+                            Procesando...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="h-5 w-5" />
+                            Completar Venta
+                          </>
+                        )}
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        className="w-full"
+                        onClick={clearCart}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
                   </>
                 )
               ) : items.length === 0 ? (

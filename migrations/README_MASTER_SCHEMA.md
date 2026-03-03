@@ -1,8 +1,8 @@
-# Script SQL Maestro - VentaPlus
+# Script SQL Maestro - ventasjcell
 
 ## 📋 Descripción
 
-El archivo `00_MASTER_SCHEMA.sql` contiene toda la estructura de base de datos necesaria para duplicar el sistema VentaPlus en un nuevo proyecto de Supabase.
+El archivo `00_MASTER_SCHEMA.sql` contiene toda la estructura de base de datos necesaria para duplicar el sistema ventasjcell en un nuevo proyecto de Supabase.
 
 Este script incluye:
 - ✅ Todas las tablas del sistema
