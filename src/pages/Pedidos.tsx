@@ -751,27 +751,27 @@ export default function Pedidos() {
           setSelectedPedido(null);
         }
       }}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{showEditDialog ? 'Editar Pedido' : 'Nuevo Pedido'}</DialogTitle>
-            <DialogDescription>
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-[min(100vw-1rem,42rem)] sm:max-w-2xl max-h-[85dvh] overflow-y-auto p-4 gap-3 sm:p-6 sm:gap-4">
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="text-base sm:text-lg">{showEditDialog ? 'Editar Pedido' : 'Nuevo Pedido'}</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
               {showEditDialog 
                 ? 'Modifica los productos y observaciones de tu pedido'
                 : 'Crea un nuevo pedido basado en tus preregistros'
               }
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-3 py-2 sm:space-y-4 sm:py-3">
             {/* Agregar Producto */}
-            <div className="space-y-2">
-              <Label>Agregar Producto</Label>
-              <div className="flex gap-2">
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label className="text-sm">Agregar Producto</Label>
+              <div className="flex gap-1.5 sm:gap-2">
                 <Popover open={productSearchOpen} onOpenChange={setProductSearchOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
                       role="combobox"
-                      className="flex-1 justify-between"
+                      className="flex-1 justify-between h-9 text-sm min-w-0"
                     >
                       {selectedProduct
                         ? productosDisponibles.find(p => p.id === selectedProduct)?.nombre
@@ -779,7 +779,7 @@ export default function Pedidos() {
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[400px] p-0" align="start">
+                  <PopoverContent className="w-[min(100vw-2rem,400px)] max-w-[calc(100vw-2rem)] p-0" align="start">
                     <Command>
                       <CommandInput 
                         placeholder="Buscar producto..." 
@@ -822,10 +822,10 @@ export default function Pedidos() {
                   min="1"
                   value={cantidadProducto}
                   onChange={(e) => setCantidadProducto(e.target.value)}
-                  placeholder="Cantidad"
-                  className="w-24"
+                  placeholder="Cant."
+                  className="w-[4.25rem] h-9 shrink-0 px-2 text-sm"
                 />
-                <Button onClick={handleAddProducto} variant="outline">
+                <Button onClick={handleAddProducto} variant="outline" size="icon" className="h-9 w-9 shrink-0">
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
@@ -833,11 +833,11 @@ export default function Pedidos() {
 
             {/* Lista de Productos */}
             {detallesPedido.length > 0 && (
-              <div className="space-y-2">
-                <Label>Productos del Pedido</Label>
-                <div className="border rounded-lg divide-y max-h-[200px] overflow-y-auto">
+              <div className="space-y-1.5 sm:space-y-2">
+                <Label className="text-sm">Productos del Pedido</Label>
+                <div className="border rounded-lg divide-y max-h-[120px] sm:max-h-[180px] overflow-y-auto text-sm">
                   {detallesPedido.map((detalle) => (
-                    <div key={detalle.id_producto} className="flex items-center justify-between p-3">
+                    <div key={detalle.id_producto} className="flex items-center justify-between px-2 py-2 sm:p-3">
                       <div className="flex-1">
                         <p className="font-medium">{detalle.nombre}</p>
                         <p className="text-sm text-muted-foreground">
@@ -858,18 +858,23 @@ export default function Pedidos() {
             )}
 
             {/* Observaciones */}
-            <div className="space-y-2">
-              <Label>Observaciones (opcional)</Label>
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label className="text-sm">Observaciones (opcional)</Label>
               <Textarea
                 value={observaciones}
                 onChange={(e) => setObservaciones(e.target.value)}
                 placeholder="Notas adicionales sobre el pedido..."
-                rows={3}
+                rows={2}
+                className="min-h-[56px] max-h-24 resize-y text-sm py-2"
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => {
+          <DialogFooter className="gap-2 pt-1 sm:pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="sm:h-10"
+              onClick={() => {
               setShowCreateDialog(false);
               setShowEditDialog(false);
               resetForm();
@@ -877,6 +882,8 @@ export default function Pedidos() {
               Cancelar
             </Button>
             <Button 
+              size="sm"
+              className="sm:h-10"
               onClick={showEditDialog ? handleUpdatePedido : handleCreatePedido}
               disabled={
                 detallesPedido.length === 0 ||
