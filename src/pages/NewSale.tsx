@@ -94,6 +94,37 @@ import {
   PaginationPrevious,
 } from '@/components/ui/pagination';
 
+type BucketVentaResumen = 'tarjeta' | 'recarga' | 'chip' | 'otros';
+
+function normalizeResumenStr(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
+}
+
+/** Agrupa ventas del resumen preregistro en Tarjeta / Recarga / Chip (y Otros si no encaja). */
+function bucketPreregistroItem(
+  categoriaNombre: string | undefined,
+  productoNombre: string
+): BucketVentaResumen {
+  const c = normalizeResumenStr(categoriaNombre || '');
+  const p = normalizeResumenStr(productoNombre);
+  if (c.includes('recarga') || p.includes('recarga')) return 'recarga';
+  if (c.includes('chip') || p.includes('chip')) return 'chip';
+  if (c.includes('tarjeta') || c.includes('tarjet')) return 'tarjeta';
+  if (p.includes('tigo') || p.includes('entel') || p.includes('viva')) return 'tarjeta';
+  return 'otros';
+}
+
+function formatFechaVentaLocalLegible(): string {
+  const [y, m, d] = getLocalDateISO().split('-').map(Number);
+  const s = new Date(y, m - 1, d).toLocaleDateString('es-BO', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 export default function NewSale() {
   const isMobile = useIsMobile();
   const isDesktopLarge = useIsDesktopLarge();
@@ -322,31 +353,25 @@ export default function NewSale() {
     return preregistroItems.reduce((sum, item) => sum + item.subtotal, 0);
   }, [preregistroItems]);
 
-  // Calcular resumen por categorías
-  const resumenPorCategoria = useMemo(() => {
-    const categoriasMap = new Map<string, { nombre: string; total: number }>();
-    
-    // Agregar categoría "Sin categoría" para productos sin categoría
-    categoriasMap.set('sin-categoria', { nombre: 'Sin categoría', total: 0 });
-    
-    preregistroItems.forEach(item => {
-      const categoriaId = item.id_categoria || 'sin-categoria';
-      const categoriaNombre = item.id_categoria 
-        ? categories.find(c => c.id === item.id_categoria)?.nombre || 'Sin categoría'
-        : 'Sin categoría';
-      
-      if (!categoriasMap.has(categoriaId)) {
-        categoriasMap.set(categoriaId, { nombre: categoriaNombre, total: 0 });
-      }
-      
-      const categoria = categoriasMap.get(categoriaId)!;
-      categoria.total += item.subtotal;
+  // Tarjeta / Recarga / Chip (totales del resumen preregistro)
+  const resumenTarjetaRecargaChip = useMemo(() => {
+    const acc = { tarjeta: 0, recarga: 0, chip: 0, otros: 0 };
+    preregistroItems.forEach((item) => {
+      const catNombre = item.id_categoria
+        ? categories.find((x) => x.id === item.id_categoria)?.nombre
+        : undefined;
+      const bucket = bucketPreregistroItem(catNombre, item.nombre);
+      acc[bucket] += item.subtotal;
     });
-    
-    // Convertir a array y filtrar categorías con total 0
-    return Array.from(categoriasMap.values())
-      .filter(cat => cat.total > 0)
-      .sort((a, b) => b.total - a.total); // Ordenar por total descendente
+    const rows: { key: string; nombre: string; total: number }[] = [
+      { key: 'tarjeta', nombre: 'Tarjeta', total: acc.tarjeta },
+      { key: 'recarga', nombre: 'Recarga', total: acc.recarga },
+      { key: 'chip', nombre: 'Chip', total: acc.chip },
+    ];
+    if (acc.otros > 0) {
+      rows.push({ key: 'otros', nombre: 'Otros', total: acc.otros });
+    }
+    return rows;
   }, [preregistroItems, categories]);
 
   const filteredProducts = useMemo(() => {
@@ -1289,6 +1314,11 @@ export default function NewSale() {
                 )}
                 {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? 'Resumen de Venta' : 'Carrito'}
               </CardTitle>
+              {(user?.rol === 'minorista' || user?.rol === 'mayorista') && (
+                <p className="text-sm text-muted-foreground mt-1.5">
+                  {formatFechaVentaLocalLegible()}
+                </p>
+              )}
             </CardHeader>
             <CardContent className="p-0">
               {/* Mostrar preregistros si es minorista o mayorista */}
@@ -1305,54 +1335,40 @@ export default function NewSale() {
                         {preregistroItems.map((item) => {
                           const cantidadVendida = item.cantidad + item.aumento - item.cantidadRestante;
                           return cantidadVendida > 0 ? (
-                            <div key={item.id} className="p-4">
-                              <div className="flex items-center gap-3 flex-nowrap">
-                                <div className="min-w-0 flex-1">
-                                  <p className="font-medium text-foreground truncate">{item.nombre}</p>
-                                  <p className="text-sm text-muted-foreground truncate">
-                                    Bs. {item.precio_unitario.toFixed(2)} c/u
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <span className="w-12 text-center font-medium">{cantidadVendida}</span>
-                                </div>
-                              </div>
-                              <div className="mt-2 text-right">
-                                <p className="text-sm font-semibold">Bs. {item.subtotal.toFixed(2)}</p>
-                              </div>
+                            <div key={item.id} className="px-3 py-2.5 sm:px-4 sm:py-3">
+                              <p className="font-medium text-foreground leading-snug truncate">
+                                {item.nombre}
+                              </p>
+                              <p className="mt-0.5 text-sm tabular-nums text-muted-foreground">
+                                <span>
+                                  {cantidadVendida} × Bs. {item.precio_unitario.toFixed(2)} c/u
+                                </span>
+                                <span className="mx-1.5 opacity-60">·</span>
+                                <span className="font-semibold text-foreground">
+                                  Bs. {item.subtotal.toFixed(2)}
+                                </span>
+                              </p>
                             </div>
                           ) : null;
                         })}
                       </div>
                     </div>
-                    {/* Resumen por categorías */}
-                    {resumenPorCategoria.length > 0 && (
-                      <div className="border-t p-3 sm:p-4 space-y-2">
-                        <p className="text-sm font-semibold mb-3">Resumen por Categorías:</p>
-                        {resumenPorCategoria.map((categoria, index) => (
-                          <div key={index} className="flex justify-between items-center text-sm">
-                            <span className="text-muted-foreground">{categoria.nombre}:</span>
-                            <span className="font-medium">Bs. {categoria.total.toFixed(2)}</span>
-                          </div>
-                        ))}
-                        <div className="flex justify-between items-center pt-2 mt-2 border-t">
-                          <p className="text-sm font-semibold">Total General:</p>
-                          <p className="text-xl font-bold text-primary">
-                            Bs. {preregistroTotal.toFixed(2)}
-                          </p>
+                    {/* Tarjeta / Recarga / Chip */}
+                    <div className="border-t p-3 sm:p-4 space-y-2">
+                      <p className="text-sm font-semibold mb-3">Tarjeta, Recarga y Chip:</p>
+                      {resumenTarjetaRecargaChip.map((row) => (
+                        <div key={row.key} className="flex justify-between items-center text-sm">
+                          <span className="text-muted-foreground">{row.nombre}:</span>
+                          <span className="font-medium">Bs. {row.total.toFixed(2)}</span>
                         </div>
+                      ))}
+                      <div className="flex justify-between items-center pt-2 mt-2 border-t">
+                        <p className="text-sm font-semibold">Total General:</p>
+                        <p className="text-xl font-bold text-primary">
+                          Bs. {preregistroTotal.toFixed(2)}
+                        </p>
                       </div>
-                    )}
-                    {resumenPorCategoria.length === 0 && (
-                      <div className="border-t p-3 sm:p-4">
-                        <div className="flex justify-between items-center">
-                          <p className="text-sm font-medium">Total:</p>
-                          <p className="text-xl font-bold text-primary">
-                            Bs. {preregistroTotal.toFixed(2)}
-                          </p>
-                        </div>
-                      </div>
-                    )}
+                    </div>
 
                     {!ocultarSelectorMetodoPago && (
                     <>
@@ -2032,6 +2048,11 @@ export default function NewSale() {
                 )}
                 <span>{(user?.rol === 'minorista' || user?.rol === 'mayorista') ? 'Resumen' : 'Carrito'}</span>
               </SheetTitle>
+              {(user?.rol === 'minorista' || user?.rol === 'mayorista') && (
+                <p className="text-sm text-muted-foreground font-normal mt-1">
+                  {formatFechaVentaLocalLegible()}
+                </p>
+              )}
               <SheetDescription className="sr-only">
                 {(user?.rol === 'minorista' || user?.rol === 'mayorista') 
                   ? 'Gestiona tu resumen de pedido' 
@@ -2055,54 +2076,40 @@ export default function NewSale() {
                         {preregistroItems.map((item) => {
                           const cantidadVendida = item.cantidad + item.aumento - item.cantidadRestante;
                           return cantidadVendida > 0 ? (
-                            <div key={item.id} className="p-4">
-                              <div className="flex items-center gap-3 flex-nowrap">
-                                <div className="min-w-0 flex-1">
-                                  <p className="font-medium text-foreground truncate">{item.nombre}</p>
-                                  <p className="text-sm text-muted-foreground truncate">
-                                    Bs. {item.precio_unitario.toFixed(2)} c/u
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <span className="w-12 text-center font-medium">{cantidadVendida}</span>
-                                </div>
-                              </div>
-                              <div className="mt-2 text-right">
-                                <p className="text-sm font-semibold">Bs. {item.subtotal.toFixed(2)}</p>
-                              </div>
+                            <div key={item.id} className="px-3 py-2.5 sm:px-4 sm:py-3">
+                              <p className="font-medium text-foreground leading-snug truncate">
+                                {item.nombre}
+                              </p>
+                              <p className="mt-0.5 text-sm tabular-nums text-muted-foreground">
+                                <span>
+                                  {cantidadVendida} × Bs. {item.precio_unitario.toFixed(2)} c/u
+                                </span>
+                                <span className="mx-1.5 opacity-60">·</span>
+                                <span className="font-semibold text-foreground">
+                                  Bs. {item.subtotal.toFixed(2)}
+                                </span>
+                              </p>
                             </div>
                           ) : null;
                         })}
                       </div>
                     </div>
-                    {/* Resumen por categorías */}
-                    {resumenPorCategoria.length > 0 && (
-                      <div className="border-t p-3 sm:p-4 space-y-2">
-                        <p className="text-sm font-semibold mb-3">Resumen por Categorías:</p>
-                        {resumenPorCategoria.map((categoria, index) => (
-                          <div key={index} className="flex justify-between items-center text-sm">
-                            <span className="text-muted-foreground">{categoria.nombre}:</span>
-                            <span className="font-medium">Bs. {categoria.total.toFixed(2)}</span>
-                          </div>
-                        ))}
-                        <div className="flex justify-between items-center pt-2 mt-2 border-t">
-                          <p className="text-sm font-semibold">Total General:</p>
-                          <p className="text-xl font-bold text-primary">
-                            Bs. {preregistroTotal.toFixed(2)}
-                          </p>
+                    {/* Tarjeta / Recarga / Chip */}
+                    <div className="border-t p-3 sm:p-4 space-y-2">
+                      <p className="text-sm font-semibold mb-3">Tarjeta, Recarga y Chip:</p>
+                      {resumenTarjetaRecargaChip.map((row) => (
+                        <div key={row.key} className="flex justify-between items-center text-sm">
+                          <span className="text-muted-foreground">{row.nombre}:</span>
+                          <span className="font-medium">Bs. {row.total.toFixed(2)}</span>
                         </div>
+                      ))}
+                      <div className="flex justify-between items-center pt-2 mt-2 border-t">
+                        <p className="text-sm font-semibold">Total General:</p>
+                        <p className="text-xl font-bold text-primary">
+                          Bs. {preregistroTotal.toFixed(2)}
+                        </p>
                       </div>
-                    )}
-                    {resumenPorCategoria.length === 0 && (
-                      <div className="border-t p-3 sm:p-4">
-                        <div className="flex justify-between items-center">
-                          <p className="text-sm font-medium">Total:</p>
-                          <p className="text-xl font-bold text-primary">
-                            Bs. {preregistroTotal.toFixed(2)}
-                          </p>
-                        </div>
-                      </div>
-                    )}
+                    </div>
                   </>
                 )
               ) : items.length === 0 ? (
@@ -2422,17 +2429,15 @@ export default function NewSale() {
                   {/* Total */}
                   {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
                     <>
-                      {resumenPorCategoria.length > 0 && (
-                        <div className="border-t p-4 space-y-2">
-                          <p className="text-sm font-semibold mb-3">Resumen por Categorías:</p>
-                          {resumenPorCategoria.map((categoria, index) => (
-                            <div key={index} className="flex justify-between items-center text-sm">
-                              <span className="text-muted-foreground">{categoria.nombre}:</span>
-                              <span className="font-medium">Bs. {categoria.total.toFixed(2)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      <div className="border-t p-4 space-y-2">
+                        <p className="text-sm font-semibold mb-3">Tarjeta, Recarga y Chip:</p>
+                        {resumenTarjetaRecargaChip.map((row) => (
+                          <div key={row.key} className="flex justify-between items-center text-sm">
+                            <span className="text-muted-foreground">{row.nombre}:</span>
+                            <span className="font-medium">Bs. {row.total.toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
                       <div className="border-t bg-muted/30 p-4">
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-muted-foreground">Subtotal</span>
