@@ -2038,7 +2038,8 @@ export default function NewSale() {
                   : 'Gestiona los productos en tu carrito de venta'}
               </SheetDescription>
             </SheetHeader>
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 overflow-y-auto">
               {/* Mostrar preregistros si es minorista o mayorista */}
               {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
                 preregistroItems.length === 0 ? (
@@ -2495,6 +2496,47 @@ export default function NewSale() {
                   </div>
                 </>
               )}
+              </div>
+              {(user?.rol === 'minorista' || user?.rol === 'mayorista') &&
+                preregistroItems.length > 0 && (
+                  <div className="shrink-0 space-y-2 border-t bg-background p-4">
+                    <Button
+                      className="h-12 w-full gap-2 text-base"
+                      onClick={() => {
+                        void handleCompleteSale();
+                        setShowCartSheet(false);
+                      }}
+                      disabled={
+                        preregistroItems.filter(
+                          (item) =>
+                            item.cantidad + item.aumento - item.cantidadRestante > 0
+                        ).length === 0 || createSaleMutation.isPending
+                      }
+                    >
+                      {createSaleMutation.isPending ? (
+                        <>
+                          <Loader className="h-5 w-5 animate-spin" />
+                          Procesando...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="h-5 w-5" />
+                          Completar Venta
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => {
+                        clearCart();
+                        setShowCartSheet(false);
+                      }}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                )}
             </div>
           </SheetContent>
         </Sheet>
