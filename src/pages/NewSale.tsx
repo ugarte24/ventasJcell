@@ -238,6 +238,34 @@ export default function NewSale() {
     setTransferenciaCreada(null);
   }, [user?.id, user?.rol, minoristaPuedeEditarPreregistro]);
 
+  // Recuperar código QR desde BD si la venta ya finalizó pero el estado en cliente se perdió (recarga, otro dispositivo).
+  useEffect(() => {
+    if (user?.rol !== 'minorista' || !user.id || !minoristaEdicionBloqueada) return;
+    if (qrCode.trim()) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const t = await transferenciasService.getPendienteOrigenPorDiaVenta(user.id, getLocalDateISO());
+        if (cancelled || !t?.codigo_qr) return;
+        setQrCode(t.codigo_qr);
+        setTransferenciaCreada(t);
+        try {
+          localStorage.setItem(
+            `ventasJcell_minorista_qr_${user.id}`,
+            JSON.stringify({ codigo_qr: t.codigo_qr, fecha: getLocalDateISO() })
+          );
+        } catch {
+          /* ignore */
+        }
+      } catch (e) {
+        console.warn('No se pudo recuperar el QR de transferencia pendiente:', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, user?.rol, minoristaEdicionBloqueada, qrCode]);
+
   // Cargar preregistros si es minorista o mayorista
   useEffect(() => {
     const loadPreregistros = async () => {
@@ -1742,10 +1770,16 @@ export default function NewSale() {
                               Mostrar QR
                             </Button>
                           ) : (
-                            <p className="text-center text-sm text-muted-foreground py-2 px-1">
-                              Venta finalizada. Para editar de nuevo, un administrador debe habilitar la edición en
-                              Gestión de usuarios.
-                            </p>
+                            <div className="space-y-2 py-2 px-1 text-center">
+                              <p className="text-sm text-muted-foreground">
+                                Venta finalizada. Para editar de nuevo, un administrador debe habilitar la edición en
+                                Gestión de usuarios.
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Mostrar QR solo aparece si había saldo pendiente al finalizar y existe una transferencia
+                                pendiente; el código también se recupera al abrir el resumen.
+                              </p>
+                            </div>
                           )}
                         </>
                       ) : (
@@ -2653,10 +2687,16 @@ export default function NewSale() {
                             Mostrar QR
                           </Button>
                         ) : (
-                          <p className="text-sm text-muted-foreground text-center px-2">
-                            Venta finalizada. Para editar saldos, un administrador debe habilitar la edición en
-                            Gestión de usuarios.
-                          </p>
+                          <div className="space-y-2 px-2 text-center">
+                            <p className="text-sm text-muted-foreground">
+                              Venta finalizada. Para editar saldos, un administrador debe habilitar la edición en
+                              Gestión de usuarios.
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Mostrar QR solo aparece si al finalizar quedó saldo por transferir y la transferencia sigue
+                              pendiente (no escaneada aún).
+                            </p>
+                          </div>
                         )}
                         <Button
                           type="button"

@@ -129,6 +129,38 @@ export const transferenciasService = {
   // OBTENER TRANSFERENCIAS
   // ============================================================================
 
+  /**
+   * Transferencia pendiente del minorista origen cuya venta asociada es de `fechaVentaISO` (YYYY-MM-DD).
+   * Sirve para volver a mostrar el QR tras recargar la página.
+   */
+  async getPendienteOrigenPorDiaVenta(
+    idMinorista: string,
+    fechaVentaISO: string
+  ): Promise<TransferenciaSaldo | null> {
+    const { data: rows, error } = await supabase
+      .from('transferencias_saldos')
+      .select('*')
+      .eq('id_minorista_origen', idMinorista)
+      .eq('estado', 'pendiente')
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (error) throw new Error(handleSupabaseError(error));
+    if (!rows?.length) return null;
+
+    for (const row of rows) {
+      try {
+        const venta = await salesService.getById(row.id_venta_origen);
+        if (venta?.fecha === fechaVentaISO && row.codigo_qr) {
+          return row as TransferenciaSaldo;
+        }
+      } catch {
+        /* siguiente fila */
+      }
+    }
+    return null;
+  },
+
   async getByMinorista(idMinorista: string): Promise<TransferenciaSaldo[]> {
     const { data, error } = await supabase
       .from('transferencias_saldos')
