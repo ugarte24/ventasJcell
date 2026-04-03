@@ -10,8 +10,11 @@ export interface User {
   rol: UserRole;
   estado: 'activo' | 'inactivo';
   fecha_creacion: string;
-  /** Minorista: si es false, no puede editar saldos en Nueva venta (tras finalizar) hasta que un admin lo habilite. */
-  edicion_preregistro_nueva_venta_permitida?: boolean;
+  /**
+   * Minorista: false = bloqueado tras finalizar (RPC); true = admin habilitó edición;
+   * undefined/null desde BD = inferir bloqueo si ya hay venta desde Nueva venta ese día.
+   */
+  edicion_preregistro_nueva_venta_permitida?: boolean | null;
 }
 
 export interface Product {

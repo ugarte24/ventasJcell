@@ -163,7 +163,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           estado: userData.estado as 'activo' | 'inactivo',
           fecha_creacion: userData.fecha_creacion,
           edicion_preregistro_nueva_venta_permitida:
-            userData.edicion_preregistro_nueva_venta_permitida ?? true,
+            userData.edicion_preregistro_nueva_venta_permitida === null ||
+            userData.edicion_preregistro_nueva_venta_permitida === undefined
+              ? undefined
+              : userData.edicion_preregistro_nueva_venta_permitida,
         });
         if (!fromLogin) {
           setLoading(false);

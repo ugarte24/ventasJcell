@@ -212,6 +212,23 @@ export const ventasMinoristasService = {
     });
   },
 
+  /** Líneas creadas al finalizar desde Nueva venta (preregistro), para inferir cierre del día aunque falle el flag en usuarios. */
+  async hasVentaRegistradaDesdeNuevaVentaEnFecha(
+    idMinorista: string,
+    fechaISO: string
+  ): Promise<boolean> {
+    const { data, error } = await supabase
+      .from('ventas_minoristas')
+      .select('id')
+      .eq('id_minorista', idMinorista)
+      .eq('fecha', fechaISO)
+      .ilike('observaciones', '%Venta registrada desde preregistros%')
+      .limit(1);
+
+    if (error) throw new Error(handleSupabaseError(error));
+    return (data?.length ?? 0) > 0;
+  },
+
   /**
    * Obtener aumentos del día para un minorista
    */

@@ -269,6 +269,12 @@ export default function Users() {
           email: userEmail,
           rol: user.rol,
           estado: user.estado,
+          edicion_preregistro_nueva_venta_permitida:
+            user.edicion_preregistro_nueva_venta_permitida === true
+              ? true
+              : user.edicion_preregistro_nueva_venta_permitida === false
+                ? false
+                : undefined,
         });
         setIsEditDialogOpen(true);
         return;
@@ -326,7 +332,12 @@ export default function Users() {
       email: userEmail,
       rol: user.rol,
       estado: user.estado,
-      edicion_preregistro_nueva_venta_permitida: user.edicion_preregistro_nueva_venta_permitida ?? true,
+      edicion_preregistro_nueva_venta_permitida:
+        user.edicion_preregistro_nueva_venta_permitida === true
+          ? true
+          : user.edicion_preregistro_nueva_venta_permitida === false
+            ? false
+            : undefined,
     });
     setIsEditDialogOpen(true);
   };
@@ -840,7 +851,10 @@ export default function Users() {
                     </div>
                     <Switch
                       id="edit-edicion-preregistro"
-                      checked={updateForm.watch('edicion_preregistro_nueva_venta_permitida') ?? true}
+                      checked={
+                        (updateForm.watch('edicion_preregistro_nueva_venta_permitida') as boolean | undefined) ??
+                        selectedUser?.edicion_preregistro_nueva_venta_permitida === true
+                      }
                       onCheckedChange={(v) => updateForm.setValue('edicion_preregistro_nueva_venta_permitida', v)}
                     />
                   </div>

@@ -178,17 +178,46 @@ export default function NewSale() {
   const [showQRDialog, setShowQRDialog] = useState(false);
   const [qrCode, setQrCode] = useState<string>('');
   const [transferenciaCreada, setTransferenciaCreada] = useState<TransferenciaSaldo | null>(null);
+  const [minoristaHayVentaNuevaVentaHoy, setMinoristaHayVentaNuevaVentaHoy] = useState(false);
 
-  const minoristaPuedeEditarPreregistro =
-    user?.rol !== 'minorista' || (user?.edicion_preregistro_nueva_venta_permitida ?? true);
+  const minoristaPuedeEditarPreregistro = useMemo(() => {
+    if (user?.rol !== 'minorista') return true;
+    const p = user.edicion_preregistro_nueva_venta_permitida;
+    if (p === false) return false;
+    if (p === true) return true;
+    return !minoristaHayVentaNuevaVentaHoy;
+  }, [user?.rol, user?.edicion_preregistro_nueva_venta_permitida, minoristaHayVentaNuevaVentaHoy]);
+
   const minoristaEdicionBloqueada =
     user?.rol === 'minorista' && !minoristaPuedeEditarPreregistro;
   const minoristaMostrarQREnLugarDeFinalizar =
     minoristaEdicionBloqueada && Boolean(qrCode.trim());
 
   useEffect(() => {
+    if (user?.rol !== 'minorista' || !user.id) {
+      setMinoristaHayVentaNuevaVentaHoy(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const hay = await ventasMinoristasService.hasVentaRegistradaDesdeNuevaVentaEnFecha(
+          user.id,
+          getLocalDateISO()
+        );
+        if (!cancelled) setMinoristaHayVentaNuevaVentaHoy(hay);
+      } catch {
+        if (!cancelled) setMinoristaHayVentaNuevaVentaHoy(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, user?.rol]);
+
+  useEffect(() => {
     if (user?.rol !== 'minorista' || !user.id) return;
-    if ((user.edicion_preregistro_nueva_venta_permitida ?? true) !== false) return;
+    if (minoristaPuedeEditarPreregistro) return;
     try {
       const raw = localStorage.getItem(`ventasJcell_minorista_qr_${user.id}`);
       if (!raw) return;
@@ -199,15 +228,15 @@ export default function NewSale() {
     } catch {
       /* ignore */
     }
-  }, [user?.id, user?.rol, user?.edicion_preregistro_nueva_venta_permitida]);
+  }, [user?.id, user?.rol, minoristaPuedeEditarPreregistro]);
 
   useEffect(() => {
     if (user?.rol !== 'minorista' || !user.id) return;
-    if (user.edicion_preregistro_nueva_venta_permitida === false) return;
+    if (!minoristaPuedeEditarPreregistro) return;
     localStorage.removeItem(`ventasJcell_minorista_qr_${user.id}`);
     setQrCode('');
     setTransferenciaCreada(null);
-  }, [user?.id, user?.rol, user?.edicion_preregistro_nueva_venta_permitida]);
+  }, [user?.id, user?.rol, minoristaPuedeEditarPreregistro]);
 
   // Cargar preregistros si es minorista o mayorista
   useEffect(() => {
@@ -544,6 +573,7 @@ export default function NewSale() {
               });
             }
           }
+          setMinoristaHayVentaNuevaVentaHoy(true);
         } else if (user.rol === 'mayorista') {
           // Crear registros en ventas_mayoristas para cada producto vendido
           try {
