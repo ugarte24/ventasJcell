@@ -264,6 +264,16 @@ Si encuentras problemas durante la migración:
 2. Verificar que todos los scripts se ejecutaron en orden
 3. Consultar el documento `PLAN_MEJORA_MINORISTAS_MAYORISTAS.md` para más detalles
 
+## 📌 Migración: Saldo restante en BD (Nueva Venta)
+
+**Archivo:** `rpc_set_preregistro_cantidad_restante_minorista.sql`
+
+Crea la columna `cantidad_restante` en `preregistros_minorista` y `preregistros_mayorista` (si no existe) y la función RPC `set_preregistro_cantidad_restante_minorista` para que los minoristas actualicen solo ese campo sin violar RLS.
+
+Ejecutar en Supabase SQL Editor cuando quieras persistir el saldo en servidor.
+
+---
+
 ## 📌 Migración Adicional: Preregistros Mayorista Reutilizables
 
 **Archivo:** `update_preregistros_mayorista_structure.sql`

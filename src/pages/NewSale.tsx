@@ -172,13 +172,18 @@ export default function NewSale() {
           const items: PreregistroVentaItem[] = preregistros.map(p => {
             const aumento = aumentosPorProducto.get(p.id_producto) || 0;
             const saldoDisponible = p.cantidad + aumento;
-            
-            // Intentar cargar saldo restante guardado desde localStorage
-            const storageKey = `preregistro_saldo_${user.id}_${p.id}`;
-            const saldoGuardado = localStorage.getItem(storageKey);
-            const cantidadRestante = saldoGuardado !== null 
-              ? Math.max(0, Math.min(parseInt(saldoGuardado), saldoDisponible))
-              : saldoDisponible;
+
+            let cantidadRestante: number;
+            if (p.cantidad_restante != null && !Number.isNaN(Number(p.cantidad_restante))) {
+              cantidadRestante = Math.max(0, Math.min(Number(p.cantidad_restante), saldoDisponible));
+            } else {
+              const storageKey = `preregistro_saldo_${user.id}_${p.id}`;
+              const saldoGuardado = localStorage.getItem(storageKey);
+              cantidadRestante =
+                saldoGuardado !== null
+                  ? Math.max(0, Math.min(parseInt(saldoGuardado, 10), saldoDisponible))
+                  : saldoDisponible;
+            }
             
             return {
               id: p.id,
@@ -224,13 +229,18 @@ export default function NewSale() {
           const items: PreregistroVentaItem[] = preregistros.map(p => {
             const aumento = aumentosPorProducto.get(p.id_producto) || 0;
             const saldoDisponible = p.cantidad + aumento; // TODO: Sumar saldos arrastrados del último arqueo
-            
-            // Intentar cargar saldo restante guardado desde localStorage
-            const storageKey = `preregistro_saldo_${user.id}_${p.id}`;
-            const saldoGuardado = localStorage.getItem(storageKey);
-            const cantidadRestante = saldoGuardado !== null 
-              ? Math.max(0, Math.min(parseInt(saldoGuardado), saldoDisponible))
-              : saldoDisponible;
+
+            let cantidadRestante: number;
+            if (p.cantidad_restante != null && !Number.isNaN(Number(p.cantidad_restante))) {
+              cantidadRestante = Math.max(0, Math.min(Number(p.cantidad_restante), saldoDisponible));
+            } else {
+              const storageKey = `preregistro_saldo_${user.id}_${p.id}`;
+              const saldoGuardado = localStorage.getItem(storageKey);
+              cantidadRestante =
+                saldoGuardado !== null
+                  ? Math.max(0, Math.min(parseInt(saldoGuardado, 10), saldoDisponible))
+                  : saldoDisponible;
+            }
             
             return {
               id: p.id,
@@ -262,24 +272,42 @@ export default function NewSale() {
     loadPreregistros();
   }, [user]);
 
-  // Función para actualizar cantidadRestante
-  const handleUpdateCantidadRestante = (itemId: string, newValue: number) => {
-    setPreregistroItems(prev => prev.map(item => {
-      if (item.id === itemId) {
-        const cantidadRestante = Math.max(0, Math.min(newValue, item.cantidad + item.aumento));
-        const subtotal = (item.cantidad + item.aumento - cantidadRestante) * item.precio_unitario;
-        const updatedItem = { ...item, cantidadRestante, subtotal };
-        
-        // Guardar en localStorage para persistir los cambios
-        if (user) {
-          const storageKey = `preregistro_saldo_${user.id}_${itemId}`;
-          localStorage.setItem(storageKey, cantidadRestante.toString());
-        }
-        
-        return updatedItem;
+  const handleUpdateCantidadRestante = async (itemId: string, newValue: number) => {
+    if (!user) return;
+    const item = preregistroItems.find((i) => i.id === itemId);
+    if (!item) return;
+
+    const cantidadRestante = Math.max(0, Math.min(newValue, item.cantidad + item.aumento));
+    const subtotal = (item.cantidad + item.aumento - cantidadRestante) * item.precio_unitario;
+    const prevRestante = item.cantidadRestante;
+    const prevSubtotal = item.subtotal;
+
+    setPreregistroItems((prev) =>
+      prev.map((i) =>
+        i.id === itemId ? { ...i, cantidadRestante, subtotal } : i
+      )
+    );
+
+    try {
+      if (user.rol === 'minorista') {
+        await preregistrosService.updateCantidadRestanteMinorista(itemId, cantidadRestante);
+      } else if (user.rol === 'mayorista') {
+        await preregistrosService.updateCantidadRestanteMayorista(itemId, cantidadRestante);
+      } else {
+        return;
       }
-      return item;
-    }));
+      localStorage.removeItem(`preregistro_saldo_${user.id}_${itemId}`);
+    } catch (err: unknown) {
+      setPreregistroItems((prev) =>
+        prev.map((i) =>
+          i.id === itemId
+            ? { ...i, cantidadRestante: prevRestante, subtotal: prevSubtotal }
+            : i
+        )
+      );
+      const message = err instanceof Error ? err.message : 'No se pudo guardar el saldo';
+      toast.error(message);
+    }
   };
 
   // NOTA: La función handleUpdateAumento fue eliminada.
@@ -533,21 +561,34 @@ export default function NewSale() {
             }
           }
         }
-        
-        // Actualizar preregistros procesados y localStorage
-        setPreregistroItems(prev => prev.map(item => {
+
+        for (const item of itemsConVenta) {
           const cantidadVendida = item.cantidad + item.aumento - item.cantidadRestante;
-          if (cantidadVendida > 0) {
-            // Actualizar el saldo guardado en localStorage con el nuevo saldo restante
-            const storageKey = `preregistro_saldo_${user.id}_${item.id}`;
-            // El saldo restante actual ya es correcto, solo actualizamos el subtotal
-            localStorage.setItem(storageKey, item.cantidadRestante.toString());
-            
-            // Mantener el saldo restante actual y resetear el subtotal
-            return { ...item, subtotal: 0 };
+          if (cantidadVendida <= 0) continue;
+          try {
+            if (user.rol === 'minorista') {
+              await preregistrosService.updateCantidadRestanteMinorista(item.id, item.cantidadRestante);
+            } else {
+              await preregistrosService.updateCantidadRestanteMayorista(item.id, item.cantidadRestante);
+            }
+          } catch (persistErr: unknown) {
+            console.error('Error guardando cantidad_restante tras venta:', persistErr);
+            toast.error(
+              'La venta se registró, pero el saldo no se guardó en el servidor. Ejecuta la migración RPC o revisa permisos.'
+            );
           }
-          return item;
-        }));
+          localStorage.removeItem(`preregistro_saldo_${user.id}_${item.id}`);
+        }
+
+        setPreregistroItems((prev) =>
+          prev.map((item) => {
+            const cantidadVendida = item.cantidad + item.aumento - item.cantidadRestante;
+            if (cantidadVendida > 0) {
+              return { ...item, subtotal: 0 };
+            }
+            return item;
+          })
+        );
 
         // Si es venta a crédito, resetear también los campos de crédito
         if (selectedPayment === 'credito') {

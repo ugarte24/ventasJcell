@@ -151,11 +151,43 @@ export const preregistrosService = {
     } as PreregistroMinorista;
   },
 
+  /**
+   * Persiste el saldo restante desde Nueva Venta (minorista autenticado).
+   * Requiere la función RPC en Supabase: set_preregistro_cantidad_restante_minorista
+   */
+  async updateCantidadRestanteMinorista(
+    preregistroId: string,
+    cantidadRestante: number
+  ): Promise<void> {
+    const { error } = await supabase.rpc('set_preregistro_cantidad_restante_minorista', {
+      p_preregistro_id: preregistroId,
+      p_cantidad_restante: cantidadRestante,
+    });
+    if (error) throw new Error(handleSupabaseError(error));
+  },
+
+  /** Saldo restante para mayorista (RLS permite actualizar filas propias). */
+  async updateCantidadRestanteMayorista(
+    preregistroId: string,
+    cantidadRestante: number
+  ): Promise<void> {
+    const updatedAt = getLocalDateTimeISO();
+    const { error } = await supabase
+      .from('preregistros_mayorista')
+      .update({
+        cantidad_restante: cantidadRestante,
+        updated_at: updatedAt,
+      })
+      .eq('id', preregistroId);
+    if (error) throw new Error(handleSupabaseError(error));
+  },
+
   async updatePreregistroMinorista(
     id: string,
     updates: {
       id_producto?: string;
       cantidad?: number;
+      cantidad_restante?: number | null;
     }
   ): Promise<PreregistroMinorista> {
     const updatedAt = getLocalDateTimeISO();
@@ -367,6 +399,7 @@ export const preregistrosService = {
     updates: {
       id_producto?: string;
       cantidad?: number;
+      cantidad_restante?: number | null;
     }
   ): Promise<PreregistroMayorista> {
     const updatedAt = getLocalDateTimeISO();
