@@ -18,6 +18,7 @@ export interface UpdateUserData {
   email?: string;
   rol?: 'admin' | 'vendedor' | 'minorista' | 'mayorista';
   estado?: 'activo' | 'inactivo';
+  edicion_preregistro_nueva_venta_permitida?: boolean;
 }
 
 export const usersService = {
@@ -342,6 +343,14 @@ export const usersService = {
 
     // Nota: Para eliminar completamente de Auth, usa el dashboard de Supabase
     // o crea una Edge Function con permisos de servicio
+  },
+
+  /** Solo minorista autenticado; usa RPC (RLS no permite UPDATE directo en usuarios). */
+  async minoristaSetEdicionPreregistroPermitida(permitida: boolean): Promise<void> {
+    const { error } = await supabase.rpc('minorista_set_edicion_preregistro_permitida', {
+      p_permitida: permitida,
+    });
+    if (error) throw new Error(handleSupabaseError(error));
   },
 };
 

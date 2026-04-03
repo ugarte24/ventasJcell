@@ -69,11 +69,12 @@ import {
   X
 } from 'lucide-react';
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser, useToggleUserStatus, useUpdateUserPassword } from '@/hooks/useUsers';
-import { usersService } from '@/services/users.service';
+import { usersService, type UpdateUserData } from '@/services/users.service';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import { User as UserType, UserRole } from '@/types';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -95,6 +96,7 @@ const updateUserSchema = z.object({
   email: z.string().email('Email inválido').optional().or(z.literal('')),
   rol: z.enum(['admin', 'vendedor', 'minorista', 'mayorista']).optional(),
   estado: z.enum(['activo', 'inactivo']).optional(),
+  edicion_preregistro_nueva_venta_permitida: z.boolean().optional(),
 });
 
 type CreateUserForm = z.infer<typeof createUserSchema>;
@@ -197,9 +199,14 @@ export default function Users() {
   const handleUpdateUser = async (data: UpdateUserForm) => {
     if (!selectedUser) return;
     try {
+      const { edicion_preregistro_nueva_venta_permitida, ...rest } = data;
+      const updates: UpdateUserData = { ...rest };
+      if (selectedUser.rol === 'minorista' && typeof edicion_preregistro_nueva_venta_permitida === 'boolean') {
+        updates.edicion_preregistro_nueva_venta_permitida = edicion_preregistro_nueva_venta_permitida;
+      }
       await updateUserMutation.mutateAsync({
         id: selectedUser.id,
-        updates: data,
+        updates,
       });
       toast.success('Usuario actualizado exitosamente');
       setIsEditDialogOpen(false);
@@ -319,6 +326,7 @@ export default function Users() {
       email: userEmail,
       rol: user.rol,
       estado: user.estado,
+      edicion_preregistro_nueva_venta_permitida: user.edicion_preregistro_nueva_venta_permitida ?? true,
     });
     setIsEditDialogOpen(true);
   };
@@ -821,6 +829,22 @@ export default function Users() {
                     </SelectContent>
                   </Select>
                 </div>
+                {selectedUser?.rol === 'minorista' && currentUser?.rol === 'admin' && (
+                  <div className="flex flex-row items-center justify-between gap-4 rounded-lg border p-3">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="edit-edicion-preregistro">Editar saldos en Nueva venta</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Desactívalo para impedir cambios en el preregistro. Tras finalizar una venta el sistema lo
+                        bloquea automáticamente hasta que lo vuelvas a activar.
+                      </p>
+                    </div>
+                    <Switch
+                      id="edit-edicion-preregistro"
+                      checked={updateForm.watch('edicion_preregistro_nueva_venta_permitida') ?? true}
+                      onCheckedChange={(v) => updateForm.setValue('edicion_preregistro_nueva_venta_permitida', v)}
+                    />
+                  </div>
+                )}
               </div>
               <DialogFooter>
                 <Button

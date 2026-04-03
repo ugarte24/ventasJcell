@@ -10,6 +10,8 @@ export interface User {
   rol: UserRole;
   estado: 'activo' | 'inactivo';
   fecha_creacion: string;
+  /** Minorista: si es false, no puede editar saldos en Nueva venta (tras finalizar) hasta que un admin lo habilite. */
+  edicion_preregistro_nueva_venta_permitida?: boolean;
 }
 
 export interface Product {

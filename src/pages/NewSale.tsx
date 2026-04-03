@@ -21,6 +21,7 @@ import { usersService } from '@/services/users.service';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
@@ -152,7 +153,7 @@ export default function NewSale() {
   const [cuotaInicialInput, setCuotaInicialInput] = useState<string>('');
   
   const { items, addItem, removeItem, updateQuantity, clearCart, total, itemCount } = useCart();
-  const { user } = useAuth();
+  const { user, refreshUserProfile } = useAuth();
   const ocultarSelectorMetodoPago =
     user?.rol === 'minorista' || user?.rol === 'mayorista';
 
@@ -177,6 +178,36 @@ export default function NewSale() {
   const [showQRDialog, setShowQRDialog] = useState(false);
   const [qrCode, setQrCode] = useState<string>('');
   const [transferenciaCreada, setTransferenciaCreada] = useState<TransferenciaSaldo | null>(null);
+
+  const minoristaPuedeEditarPreregistro =
+    user?.rol !== 'minorista' || (user?.edicion_preregistro_nueva_venta_permitida ?? true);
+  const minoristaEdicionBloqueada =
+    user?.rol === 'minorista' && !minoristaPuedeEditarPreregistro;
+  const minoristaMostrarQREnLugarDeFinalizar =
+    minoristaEdicionBloqueada && Boolean(qrCode.trim());
+
+  useEffect(() => {
+    if (user?.rol !== 'minorista' || !user.id) return;
+    if ((user.edicion_preregistro_nueva_venta_permitida ?? true) !== false) return;
+    try {
+      const raw = localStorage.getItem(`ventasJcell_minorista_qr_${user.id}`);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { codigo_qr?: string; fecha?: string };
+      if (parsed.fecha === getLocalDateISO() && parsed.codigo_qr) {
+        setQrCode(parsed.codigo_qr);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [user?.id, user?.rol, user?.edicion_preregistro_nueva_venta_permitida]);
+
+  useEffect(() => {
+    if (user?.rol !== 'minorista' || !user.id) return;
+    if (user.edicion_preregistro_nueva_venta_permitida === false) return;
+    localStorage.removeItem(`ventasJcell_minorista_qr_${user.id}`);
+    setQrCode('');
+    setTransferenciaCreada(null);
+  }, [user?.id, user?.rol, user?.edicion_preregistro_nueva_venta_permitida]);
 
   // Cargar preregistros si es minorista o mayorista
   useEffect(() => {
@@ -308,6 +339,12 @@ export default function NewSale() {
 
   const handleUpdateCantidadRestante = async (itemId: string, newValue: number) => {
     if (!user) return;
+    if (user.rol === 'minorista' && !minoristaPuedeEditarPreregistro) {
+      toast.error(
+        'No puedes editar los saldos. Un administrador debe habilitar la edición en Gestión de usuarios.'
+      );
+      return;
+    }
     const item = preregistroItems.find((i) => i.id === itemId);
     if (!item) return;
 
@@ -403,6 +440,12 @@ export default function NewSale() {
 
     // Si es minorista o mayorista, usar preregistros
     if (user.rol === 'minorista' || user.rol === 'mayorista') {
+      if (user.rol === 'minorista' && !minoristaPuedeEditarPreregistro) {
+        toast.error(
+          'Ya finalizaste la venta. Un administrador debe habilitar de nuevo la edición en Gestión de usuarios.'
+        );
+        return;
+      }
       if (preregistroItems.length === 0) {
         toast.error('No hay preregistros para procesar');
         return;
@@ -567,28 +610,37 @@ export default function NewSale() {
           setSaldosParaArrastrar(saldosRestantes);
         }
 
-        // Si es minorista: preparar para generar QR (si hay saldos restantes)
+        let transferenciaMinorista: TransferenciaSaldo | null = null;
         if (user.rol === 'minorista') {
           const saldosRestantes = preregistroItems
-            .filter(item => item.cantidadRestante > 0)
-            .map(item => ({
+            .filter((item) => item.cantidadRestante > 0)
+            .map((item) => ({
               id_producto: item.id_producto,
               cantidad_restante: item.cantidadRestante,
             }));
 
           if (saldosRestantes.length > 0) {
-            // Crear transferencia y generar QR
             try {
-              const transferencia = await transferenciasService.create(
+              transferenciaMinorista = await transferenciasService.create(
                 newSale.id,
                 user.id,
                 saldosRestantes
               );
-              setTransferenciaCreada(transferencia);
-              setQrCode(transferencia.codigo_qr);
-            } catch (error: any) {
+              setTransferenciaCreada(transferenciaMinorista);
+              setQrCode(transferenciaMinorista.codigo_qr);
+              try {
+                localStorage.setItem(
+                  `ventasJcell_minorista_qr_${user.id}`,
+                  JSON.stringify({
+                    codigo_qr: transferenciaMinorista.codigo_qr,
+                    fecha: fechaActual,
+                  })
+                );
+              } catch {
+                /* ignore */
+              }
+            } catch (error: unknown) {
               console.error('Error al crear transferencia:', error);
-              // Continuar sin QR si hay error
             }
           }
         }
@@ -609,6 +661,20 @@ export default function NewSale() {
             );
           }
           localStorage.removeItem(`preregistro_saldo_${user.id}_${item.id}`);
+        }
+
+        if (user.rol === 'minorista') {
+          try {
+            await usersService.minoristaSetEdicionPreregistroPermitida(false);
+            await refreshUserProfile();
+          } catch (e: unknown) {
+            console.error(e);
+            toast.error(
+              e instanceof Error
+                ? e.message
+                : 'No se pudo bloquear la edición del preregistro. Ejecuta la migración SQL o revisa permisos de la RPC.'
+            );
+          }
         }
 
         setPreregistroItems((prev) =>
@@ -641,7 +707,7 @@ export default function NewSale() {
         // Mostrar diálogo según el rol
         if (user.rol === 'mayorista') {
           setShowArrastrarSaldosDialog(true);
-        } else if (user.rol === 'minorista' && transferenciaCreada) {
+        } else if (user.rol === 'minorista' && transferenciaMinorista) {
           setShowQRDialog(true);
         } else {
           setShowSuccessDialog(true);
@@ -946,6 +1012,14 @@ export default function NewSale() {
                   </div>
                 ) : (
                   <div className="space-y-4">
+                    {user?.rol === 'minorista' && minoristaEdicionBloqueada && (
+                      <Alert>
+                        <AlertDescription>
+                          Venta finalizada: no puedes editar los saldos del preregistro. Un administrador puede
+                          volver a habilitar la edición en Gestión de usuarios.
+                        </AlertDescription>
+                      </Alert>
+                    )}
                     <div className="rounded-lg border -mx-4 sm:-mx-6 lg:mx-0 overflow-hidden">
                       <div className="p-2 sm:p-4 lg:p-6">
                         <div className="overflow-x-auto overscroll-x-contain touch-pan-x" style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'thin' }}>
@@ -981,7 +1055,10 @@ export default function NewSale() {
                               </tr>
                             </thead>
                             <tbody className="[&_tr:last-child]:border-0">
-                              {preregistroItems.map((item) => (
+                              {preregistroItems.map((item) => {
+                                const minoristaSaldoBloqueado =
+                                  user?.rol === 'minorista' && !minoristaPuedeEditarPreregistro;
+                                return (
                                 <tr key={item.id} className="border-b transition-colors hover:bg-muted/50">
                                   <td className="p-1.5 sm:p-2 md:p-4 align-middle">
                                     <p className="font-medium text-xs sm:text-sm truncate max-w-[80px] sm:max-w-none">{item.nombre}</p>
@@ -993,7 +1070,7 @@ export default function NewSale() {
                                     {item.aumento}
                                   </td>
                                   <td className="p-1.5 sm:p-2 md:p-4 align-middle text-right">
-                                    {editingCantidadRestante === item.id ? (
+                                    {editingCantidadRestante === item.id && !minoristaSaldoBloqueado ? (
                                       <div className="flex items-center gap-1 sm:gap-2 justify-end">
                                         <Input
                                           type="number"
@@ -1044,6 +1121,10 @@ export default function NewSale() {
                                           <X className="h-3 w-3 sm:h-4 sm:w-4" />
                                         </Button>
                                       </div>
+                                    ) : minoristaSaldoBloqueado ? (
+                                      <span className="inline-flex h-7 sm:h-8 items-center justify-end px-1.5 sm:px-2 text-xs sm:text-sm tabular-nums w-full">
+                                        {item.cantidadRestante}
+                                      </span>
                                     ) : (
                                       <Button
                                         variant="ghost"
@@ -1072,13 +1153,16 @@ export default function NewSale() {
                                         setEditingCantidadRestante(item.id);
                                         setEditCantidadRestanteValue(item.cantidadRestante.toString());
                                       }}
-                                      disabled={editingCantidadRestante === item.id}
+                                      disabled={
+                                        editingCantidadRestante === item.id || minoristaSaldoBloqueado
+                                      }
                                     >
                                       <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
                                     </Button>
                                   </td>
                                 </tr>
-                              ))}
+                              );
+                              })}
                             </tbody>
                           </table>
                         </div>
@@ -1616,34 +1700,53 @@ export default function NewSale() {
 
                     {/* Actions */}
                     <div className="p-3 sm:p-4 space-y-2 border-t">
-                      <Button 
-                        className="w-full h-11 sm:h-12 gap-2 text-sm sm:text-base" 
-                        onClick={handleCompleteSale}
-                        disabled={
-                          preregistroItems.filter(item => 
-                            (item.cantidad + item.aumento - item.cantidadRestante) > 0
-                          ).length === 0 || createSaleMutation.isPending
-                        }
-                      >
-                        {createSaleMutation.isPending ? (
-                          <>
-                            <Loader className="h-5 w-5 animate-spin" />
-                            Procesando...
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle className="h-5 w-5" />
-                            Completar Venta
-                          </>
-                        )}
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        className="w-full"
-                        onClick={clearCart}
-                      >
-                        Cancelar
-                      </Button>
+                      {user?.rol === 'minorista' && minoristaEdicionBloqueada ? (
+                        <>
+                          {minoristaMostrarQREnLugarDeFinalizar ? (
+                            <Button
+                              type="button"
+                              className="w-full h-11 sm:h-12 gap-2 text-sm sm:text-base"
+                              onClick={() => setShowQRDialog(true)}
+                            >
+                              <QrCode className="h-5 w-5" />
+                              Mostrar QR
+                            </Button>
+                          ) : (
+                            <p className="text-center text-sm text-muted-foreground py-2 px-1">
+                              Venta finalizada. Para editar de nuevo, un administrador debe habilitar la edición en
+                              Gestión de usuarios.
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            className="w-full h-11 sm:h-12 gap-2 text-sm sm:text-base"
+                            onClick={handleCompleteSale}
+                            disabled={
+                              preregistroItems.filter(
+                                (item) =>
+                                  item.cantidad + item.aumento - item.cantidadRestante > 0
+                              ).length === 0 || createSaleMutation.isPending
+                            }
+                          >
+                            {createSaleMutation.isPending ? (
+                              <>
+                                <Loader className="h-5 w-5 animate-spin" />
+                                Procesando...
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle className="h-5 w-5" />
+                                {user?.rol === 'minorista' ? 'Finalizar venta' : 'Completar Venta'}
+                              </>
+                            )}
+                          </Button>
+                          <Button variant="outline" className="w-full" onClick={clearCart}>
+                            Cancelar
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </>
                 )
@@ -2508,41 +2611,71 @@ export default function NewSale() {
               {(user?.rol === 'minorista' || user?.rol === 'mayorista') &&
                 preregistroItems.length > 0 && (
                   <div className="shrink-0 space-y-2 border-t bg-background p-4">
-                    <Button
-                      className="h-12 w-full gap-2 text-base"
-                      onClick={() => {
-                        void handleCompleteSale();
-                        setShowCartSheet(false);
-                      }}
-                      disabled={
-                        preregistroItems.filter(
-                          (item) =>
-                            item.cantidad + item.aumento - item.cantidadRestante > 0
-                        ).length === 0 || createSaleMutation.isPending
-                      }
-                    >
-                      {createSaleMutation.isPending ? (
-                        <>
-                          <Loader className="h-5 w-5 animate-spin" />
-                          Procesando...
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle className="h-5 w-5" />
-                          Completar Venta
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => {
-                        clearCart();
-                        setShowCartSheet(false);
-                      }}
-                    >
-                      Cancelar
-                    </Button>
+                    {user?.rol === 'minorista' && minoristaEdicionBloqueada ? (
+                      <>
+                        {minoristaMostrarQREnLugarDeFinalizar ? (
+                          <Button
+                            type="button"
+                            className="h-12 w-full gap-2 text-base"
+                            onClick={() => setShowQRDialog(true)}
+                          >
+                            <QrCode className="h-5 w-5" />
+                            Mostrar QR
+                          </Button>
+                        ) : (
+                          <p className="text-sm text-muted-foreground text-center px-2">
+                            Venta finalizada. Para editar saldos, un administrador debe habilitar la edición en
+                            Gestión de usuarios.
+                          </p>
+                        )}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => setShowCartSheet(false)}
+                        >
+                          Cerrar
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          className="h-12 w-full gap-2 text-base"
+                          onClick={() => {
+                            void handleCompleteSale();
+                            setShowCartSheet(false);
+                          }}
+                          disabled={
+                            preregistroItems.filter(
+                              (item) =>
+                                item.cantidad + item.aumento - item.cantidadRestante > 0
+                            ).length === 0 || createSaleMutation.isPending
+                          }
+                        >
+                          {createSaleMutation.isPending ? (
+                            <>
+                              <Loader className="h-5 w-5 animate-spin" />
+                              Procesando...
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle className="h-5 w-5" />
+                              {user?.rol === 'minorista' ? 'Finalizar venta' : 'Completar Venta'}
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => {
+                            clearCart();
+                            setShowCartSheet(false);
+                          }}
+                        >
+                          Cancelar
+                        </Button>
+                      </>
+                    )}
                   </div>
                 )}
             </div>

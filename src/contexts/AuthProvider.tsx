@@ -152,14 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const userData = data as {
-        id: string;
-        nombre: string;
-        usuario: string;
-        rol: 'admin' | 'vendedor';
-        estado: 'activo' | 'inactivo';
-        fecha_creacion: string;
-      };
+      const userData = data as User & { edicion_preregistro_nueva_venta_permitida?: boolean | null };
 
       if (userData.estado === 'activo') {
         setUser({
@@ -169,6 +162,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           rol: userData.rol as UserRole,
           estado: userData.estado as 'activo' | 'inactivo',
           fecha_creacion: userData.fecha_creacion,
+          edicion_preregistro_nueva_venta_permitida:
+            userData.edicion_preregistro_nueva_venta_permitida ?? true,
         });
         if (!fromLogin) {
           setLoading(false);
@@ -373,12 +368,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const refreshUserProfile = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user?.id) {
+      await loadUserProfile(session.user.id, false);
+    }
+  };
+
   const value: AuthContextType = {
     user,
     isAuthenticated: !!user,
     loading,
     login,
     logout,
+    refreshUserProfile,
   };
 
   return (
