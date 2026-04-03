@@ -374,6 +374,9 @@ export default function NewSale() {
     return rows;
   }, [preregistroItems, categories]);
 
+  /** Alias del resumen preregistro (antes `resumenPorCategoria`). Evita ReferenceError si queda código o caché de HMR con el nombre antiguo. */
+  const resumenPorCategoria = resumenTarjetaRecargaChip;
+
   const filteredProducts = useMemo(() => {
     if (searchTerm.length > 0 && searchResults.length > 0) {
       return searchResults;
