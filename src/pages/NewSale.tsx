@@ -122,6 +122,9 @@ export default function NewSale() {
   
   const { items, addItem, removeItem, updateQuantity, clearCart, total, itemCount } = useCart();
   const { user } = useAuth();
+  const ocultarSelectorMetodoPago =
+    user?.rol === 'minorista' || user?.rol === 'mayorista';
+
   const { data: allProducts = [], isLoading: loadingProducts } = useProducts();
   const { data: searchResults = [], isLoading: searching } = useSearchProducts(searchTerm);
   const { data: allClients = [] } = useClients();
@@ -853,6 +856,12 @@ export default function NewSale() {
     return allClients;
   }, [clientSearchTerm, clientSearchResults, allClients]);
 
+  useEffect(() => {
+    if (user?.rol === 'minorista' || user?.rol === 'mayorista') {
+      setSelectedPayment('efectivo');
+    }
+  }, [user?.rol]);
+
   // Resetear campos de crédito cuando cambia el método de pago
   useEffect(() => {
     if (selectedPayment !== 'credito') {
@@ -1345,6 +1354,8 @@ export default function NewSale() {
                       </div>
                     )}
 
+                    {!ocultarSelectorMetodoPago && (
+                    <>
                     {/* Payment Method */}
                     <div className="border-t p-3 sm:p-4">
                       <p className="mb-2 sm:mb-3 text-xs sm:text-sm font-medium text-muted-foreground">Método de Pago</p>
@@ -1581,6 +1592,8 @@ export default function NewSale() {
                         </div>
                       </div>
                     )}
+                    </>
+                    )}
 
                     {/* Actions */}
                     <div className="p-3 sm:p-4 space-y-2 border-t">
@@ -1708,6 +1721,8 @@ export default function NewSale() {
                     </div>
                   </div>
 
+                  {!ocultarSelectorMetodoPago && (
+                  <>
                   {/* Payment Method */}
                   <div className="border-t p-3 sm:p-4">
                     <p className="mb-2 sm:mb-3 text-xs sm:text-sm font-medium text-muted-foreground">Método de Pago</p>
@@ -1951,6 +1966,8 @@ export default function NewSale() {
                         )}
                       </div>
                     </div>
+                  )}
+                  </>
                   )}
 
                   {/* Total */}
