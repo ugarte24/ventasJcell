@@ -17,6 +17,9 @@ export function handleSupabaseError(error: PostgrestError | Error | null): strin
         return 'No tienes permisos para realizar esta acción';
       case 'PGRST301':
         return 'Error de autenticación';
+      /** Tabla o recurso no expuesto en PostgREST (p. ej. migración no aplicada). */
+      case 'PGRST205':
+        return supabaseError.message || 'El recurso solicitado no existe en la base de datos';
       default:
         return supabaseError.message || 'Error en la base de datos';
     }

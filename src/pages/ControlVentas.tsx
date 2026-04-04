@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { 
@@ -52,10 +53,11 @@ import {
 import { useAuth } from '@/contexts';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Sale } from '@/types';
+import { Sale, User } from '@/types';
 import { salesService } from '@/services/sales.service';
 import { usersService } from '@/services/users.service';
 import { usuarioControlDiarioService, UsuarioControlDiario } from '@/services/usuario-control-diario.service';
+import { minoristaRevisionVentaService } from '@/services/minorista-revision-venta.service';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getLocalDateISO, formatDateOnlyLocal, parseDateOnlyLocal } from '@/lib/utils';
 
@@ -65,7 +67,15 @@ export default function ControlVentas() {
   const [searchTerm, setSearchTerm] = useState('');
   const [fechaControlDia, setFechaControlDia] = useState(() => getLocalDateISO());
   const [filasControl, setFilasControl] = useState<
-    Record<string, { pedidos_habilitado: boolean; efectivo_entregado: string }>
+    Record<
+      string,
+      {
+        pedidos_habilitado: boolean;
+        efectivo_entregado: string;
+        /** Solo minorista: editar preregistro en Nueva venta (persistido en usuarios). */
+        edicion_nueva_venta?: boolean;
+      }
+    >
   >({});
   const [rolFilter, setRolFilter] = useState<'mayorista' | 'minorista' | 'todos'>('todos');
   const [selectedUsuario, setSelectedUsuario] = useState<string>('todos');
@@ -189,10 +199,16 @@ export default function ControlVentas() {
     return usuarios.filter(u => u.rol === rolFilter);
   }, [usuarios, rolFilter]);
 
-  const { data: controlesDia = [], isLoading: loadingControlesDia } = useQuery({
+  const {
+    data: controlesDia = [],
+    isLoading: loadingControlesDia,
+    isError: errorControlesDia,
+    error: errorControlesQuery,
+  } = useQuery({
     queryKey: ['usuario-control-diario', fechaControlDia],
     queryFn: () => usuarioControlDiarioService.listByFecha(fechaControlDia),
     enabled: user?.rol === 'admin',
+    retry: false,
   });
 
   const controlesMap = useMemo(() => {
@@ -216,27 +232,58 @@ export default function ControlVentas() {
   });
 
   useEffect(() => {
-    const next: Record<string, { pedidos_habilitado: boolean; efectivo_entregado: string }> = {};
+    const next: Record<
+      string,
+      {
+        pedidos_habilitado: boolean;
+        efectivo_entregado: string;
+        edicion_nueva_venta?: boolean;
+      }
+    > = {};
     for (const u of usuarios) {
       const c = controlesMap.get(u.id);
       next[u.id] = {
         pedidos_habilitado: c?.pedidos_habilitado ?? false,
         efectivo_entregado: c != null ? String(c.efectivo_entregado) : '',
+        edicion_nueva_venta:
+          u.rol === 'minorista' ? u.edicion_preregistro_nueva_venta_permitida === true : undefined,
       };
     }
     setFilasControl(next);
   }, [usuarios, fechaControlDia, controlesMap]);
 
   const guardarControlMutation = useMutation({
-    mutationFn: (payload: {
-      id_usuario: string;
+    mutationFn: async (payload: {
+      usuario: User;
       fecha: string;
       pedidos_habilitado: boolean;
       efectivo_entregado: number;
-    }) => usuarioControlDiarioService.upsert(payload),
+      edicion_nueva_venta?: boolean;
+    }) => {
+      const { usuario: u, fecha, pedidos_habilitado, efectivo_entregado, edicion_nueva_venta } = payload;
+
+      if (u.rol === 'minorista' && typeof edicion_nueva_venta === 'boolean' && user?.id) {
+        const antes = u.edicion_preregistro_nueva_venta_permitida === true;
+        const despues = edicion_nueva_venta;
+        if (despues !== antes) {
+          if (despues && !antes) {
+            await minoristaRevisionVentaService.anularUltimaVentaNuevaVentaAlHabilitarEdicion(u.id, user.id);
+          }
+          await usersService.update(u.id, { edicion_preregistro_nueva_venta_permitida: despues });
+        }
+      }
+
+      await usuarioControlDiarioService.upsert({
+        id_usuario: u.id,
+        fecha,
+        pedidos_habilitado,
+        efectivo_entregado,
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['usuario-control-diario'] });
       queryClient.invalidateQueries({ queryKey: ['pedidos-gate'] });
+      queryClient.invalidateQueries({ queryKey: ['usuarios-mayoristas-minoristas'] });
       toast.success('Control guardado');
     },
     onError: (e: Error) => toast.error(e.message || 'Error al guardar'),
@@ -369,22 +416,35 @@ export default function ControlVentas() {
               <AlertTitle>Uso</AlertTitle>
               <AlertDescription>
                 Tras finalizar la venta desde Nueva venta, el usuario no puede solicitar pedidos hasta que aquí
-                actives &quot;Pedidos&quot; para ese día. Registra el efectivo físico entregado; el faltante es la
-                diferencia respecto al total vendido en efectivo registrado en el sistema para esa fecha.
+                actives &quot;Pedidos&quot; para ese día. Para minoristas, &quot;Editar Nueva venta&quot; permite
+                volver a editar el preregistro (misma regla que en Usuarios). Registra el efectivo físico
+                entregado; el faltante es la diferencia respecto al total vendido en efectivo registrado en el
+                sistema para esa fecha.
               </AlertDescription>
             </Alert>
             <div className="flex flex-wrap items-end gap-4">
               <div className="space-y-2">
                 <Label htmlFor="fecha-control-dia">Fecha</Label>
-                <Input
+                <DatePicker
                   id="fecha-control-dia"
-                  type="date"
                   value={fechaControlDia}
-                  onChange={(e) => setFechaControlDia(e.target.value)}
+                  onChange={setFechaControlDia}
+                  placeholder="dd/mm/aaaa"
                   className="w-[200px]"
                 />
               </div>
             </div>
+            {errorControlesDia && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>No se pudo cargar el control del día</AlertTitle>
+                <AlertDescription>
+                  {errorControlesQuery instanceof Error
+                    ? errorControlesQuery.message
+                    : 'Error desconocido'}
+                </AlertDescription>
+              </Alert>
+            )}
             {loadingControlesDia || loadingEfectivoEsperado ? (
               <div className="space-y-2">
                 <Skeleton className="h-12 w-full" />
@@ -398,6 +458,7 @@ export default function ControlVentas() {
                       <TableHead>Usuario</TableHead>
                       <TableHead>Rol</TableHead>
                       <TableHead className="text-center min-w-[120px]">Pedidos (solo esta fecha)</TableHead>
+                      <TableHead className="text-center min-w-[130px]">Editar Nueva venta</TableHead>
                       <TableHead className="text-right">Efectivo esperado (Bs.)</TableHead>
                       <TableHead className="min-w-[140px]">Efectivo entregado (Bs.)</TableHead>
                       <TableHead className="text-right">Faltante (Bs.)</TableHead>
@@ -427,10 +488,32 @@ export default function ControlVentas() {
                                   [u.id]: {
                                     pedidos_habilitado: v,
                                     efectivo_entregado: prev[u.id]?.efectivo_entregado ?? '',
+                                    edicion_nueva_venta: prev[u.id]?.edicion_nueva_venta,
                                   },
                                 }))
                               }
                             />
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {u.rol === 'minorista' ? (
+                              <Switch
+                                checked={fila?.edicion_nueva_venta ?? false}
+                                onCheckedChange={(v) =>
+                                  setFilasControl((prev) => ({
+                                    ...prev,
+                                    [u.id]: {
+                                      pedidos_habilitado: prev[u.id]?.pedidos_habilitado ?? false,
+                                      efectivo_entregado: prev[u.id]?.efectivo_entregado ?? '',
+                                      edicion_nueva_venta: v,
+                                    },
+                                  }))
+                                }
+                              />
+                            ) : (
+                              <span className="text-muted-foreground text-sm" title="Solo aplica a minoristas">
+                                —
+                              </span>
+                            )}
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
                             Bs. {esperado.toFixed(2)}
@@ -449,6 +532,7 @@ export default function ControlVentas() {
                                   [u.id]: {
                                     pedidos_habilitado: prev[u.id]?.pedidos_habilitado ?? false,
                                     efectivo_entregado: e.target.value,
+                                    edicion_nueva_venta: prev[u.id]?.edicion_nueva_venta,
                                   },
                                 }))
                               }
@@ -471,10 +555,12 @@ export default function ControlVentas() {
                                 const f = filasControl[u.id];
                                 if (!f) return;
                                 guardarControlMutation.mutate({
-                                  id_usuario: u.id,
+                                  usuario: u,
                                   fecha: fechaControlDia,
                                   pedidos_habilitado: f.pedidos_habilitado,
                                   efectivo_entregado: parseFloat((f.efectivo_entregado || '0').replace(',', '.')) || 0,
+                                  edicion_nueva_venta:
+                                    u.rol === 'minorista' ? (f.edicion_nueva_venta ?? false) : undefined,
                                 });
                               }}
                             >
