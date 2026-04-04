@@ -24,12 +24,14 @@ export const minoristaRevisionVentaService = {
     const lineas = await ventasMinoristasService.getLineasDesdeNuevaVentaPorVentaId(ventaId);
     const preregistros = await preregistrosService.getPreregistrosMinorista(idMinorista);
 
+    // No usar updateCantidadRestanteMinorista (RPC): exige sesión del minorista.
+    // Este flujo corre como admin; RLS permite a admin actualizar cantidad_restante vía update directo.
     for (const linea of lineas) {
       const pr = preregistros.find((p) => p.id_producto === linea.id_producto);
       if (!pr) continue;
       const actual = pr.cantidad_restante ?? 0;
       const restaurado = actual + linea.cantidad_vendida;
-      await preregistrosService.updateCantidadRestanteMinorista(pr.id, restaurado);
+      await preregistrosService.updatePreregistroMinorista(pr.id, { cantidad_restante: restaurado });
     }
 
     const idsLineas = lineas.map((l) => l.id);
