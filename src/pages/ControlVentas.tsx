@@ -5,6 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { 
   Table, 
   TableBody, 
@@ -43,21 +45,28 @@ import {
   Eye,
   Loader,
   Users,
-  ShoppingCart
+  ShoppingCart,
+  Save,
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '@/contexts';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Sale, User } from '@/types';
+import { Sale } from '@/types';
 import { salesService } from '@/services/sales.service';
 import { usersService } from '@/services/users.service';
-import { useQuery } from '@tanstack/react-query';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { usuarioControlDiarioService, UsuarioControlDiario } from '@/services/usuario-control-diario.service';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getLocalDateISO, formatDateOnlyLocal, parseDateOnlyLocal } from '@/lib/utils';
 
 export default function ControlVentas() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
+  const [fechaControlDia, setFechaControlDia] = useState(() => getLocalDateISO());
+  const [filasControl, setFilasControl] = useState<
+    Record<string, { pedidos_habilitado: boolean; efectivo_entregado: string }>
+  >({});
   const [rolFilter, setRolFilter] = useState<'mayorista' | 'minorista' | 'todos'>('todos');
   const [selectedUsuario, setSelectedUsuario] = useState<string>('todos');
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
@@ -115,9 +124,11 @@ export default function ControlVentas() {
       }
       
       return sales.sort((a, b) => {
-        const dateA = new Date(a.created_at || a.fecha).getTime();
-        const dateB = new Date(b.created_at || b.fecha).getTime();
-        return dateB - dateA;
+        const t = (s: Sale) =>
+          s.created_at
+            ? new Date(s.created_at).getTime()
+            : parseDateOnlyLocal(String(s.fecha)).getTime();
+        return t(b) - t(a);
       });
     },
     enabled: user?.rol === 'admin' && usuarios.length > 0,
@@ -177,6 +188,59 @@ export default function ControlVentas() {
     }
     return usuarios.filter(u => u.rol === rolFilter);
   }, [usuarios, rolFilter]);
+
+  const { data: controlesDia = [], isLoading: loadingControlesDia } = useQuery({
+    queryKey: ['usuario-control-diario', fechaControlDia],
+    queryFn: () => usuarioControlDiarioService.listByFecha(fechaControlDia),
+    enabled: user?.rol === 'admin',
+  });
+
+  const controlesMap = useMemo(() => {
+    const m = new Map<string, UsuarioControlDiario>();
+    controlesDia.forEach((c) => m.set(c.id_usuario, c));
+    return m;
+  }, [controlesDia]);
+
+  const { data: efectivoEsperadoPorUsuario = {}, isLoading: loadingEfectivoEsperado } = useQuery({
+    queryKey: ['efectivo-esperado-dia', fechaControlDia, usuarios.map((u) => u.id).sort().join(',')],
+    queryFn: async () => {
+      const out: Record<string, number> = {};
+      await Promise.all(
+        usuarios.map(async (u) => {
+          out[u.id] = await salesService.getTotalEfectivoVendedorEnFecha(u.id, fechaControlDia);
+        })
+      );
+      return out;
+    },
+    enabled: user?.rol === 'admin' && usuarios.length > 0,
+  });
+
+  useEffect(() => {
+    const next: Record<string, { pedidos_habilitado: boolean; efectivo_entregado: string }> = {};
+    for (const u of usuarios) {
+      const c = controlesMap.get(u.id);
+      next[u.id] = {
+        pedidos_habilitado: c?.pedidos_habilitado ?? false,
+        efectivo_entregado: c != null ? String(c.efectivo_entregado) : '',
+      };
+    }
+    setFilasControl(next);
+  }, [usuarios, fechaControlDia, controlesMap]);
+
+  const guardarControlMutation = useMutation({
+    mutationFn: (payload: {
+      id_usuario: string;
+      fecha: string;
+      pedidos_habilitado: boolean;
+      efectivo_entregado: number;
+    }) => usuarioControlDiarioService.upsert(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['usuario-control-diario'] });
+      queryClient.invalidateQueries({ queryKey: ['pedidos-gate'] });
+      toast.success('Control guardado');
+    },
+    onError: (e: Error) => toast.error(e.message || 'Error al guardar'),
+  });
 
   if (user?.rol !== 'admin') {
     return (
@@ -290,6 +354,144 @@ export default function ControlVentas() {
           </CardContent>
         </Card>
 
+        {/* Control diario: pedidos (solo la fecha elegida) y efectivo entregado vs faltante */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Control del día — mayoristas y minoristas</CardTitle>
+            <p className="text-sm text-muted-foreground font-normal">
+              La habilitación de pedidos aplica únicamente para la fecha seleccionada. Al día siguiente debe
+              volver a activarse si corresponde.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Uso</AlertTitle>
+              <AlertDescription>
+                Tras finalizar la venta desde Nueva venta, el usuario no puede solicitar pedidos hasta que aquí
+                actives &quot;Pedidos&quot; para ese día. Registra el efectivo físico entregado; el faltante es la
+                diferencia respecto al total vendido en efectivo registrado en el sistema para esa fecha.
+              </AlertDescription>
+            </Alert>
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="fecha-control-dia">Fecha</Label>
+                <Input
+                  id="fecha-control-dia"
+                  type="date"
+                  value={fechaControlDia}
+                  onChange={(e) => setFechaControlDia(e.target.value)}
+                  className="w-[200px]"
+                />
+              </div>
+            </div>
+            {loadingControlesDia || loadingEfectivoEsperado ? (
+              <div className="space-y-2">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+              </div>
+            ) : (
+              <div className="rounded-md border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Usuario</TableHead>
+                      <TableHead>Rol</TableHead>
+                      <TableHead className="text-center min-w-[120px]">Pedidos (solo esta fecha)</TableHead>
+                      <TableHead className="text-right">Efectivo esperado (Bs.)</TableHead>
+                      <TableHead className="min-w-[140px]">Efectivo entregado (Bs.)</TableHead>
+                      <TableHead className="text-right">Faltante (Bs.)</TableHead>
+                      <TableHead className="text-right w-[100px]">Acción</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {usuarios.map((u) => {
+                      const fila = filasControl[u.id];
+                      const esperado = efectivoEsperadoPorUsuario[u.id] ?? 0;
+                      const entregadoNum = parseFloat((fila?.efectivo_entregado || '').replace(',', '.')) || 0;
+                      const faltante = Math.max(0, esperado - entregadoNum);
+                      return (
+                        <TableRow key={u.id}>
+                          <TableCell className="font-medium">{u.nombre}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="capitalize">
+                              {u.rol === 'mayorista' ? 'Mayorista' : 'Minorista'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Switch
+                              checked={fila?.pedidos_habilitado ?? false}
+                              onCheckedChange={(v) =>
+                                setFilasControl((prev) => ({
+                                  ...prev,
+                                  [u.id]: {
+                                    pedidos_habilitado: v,
+                                    efectivo_entregado: prev[u.id]?.efectivo_entregado ?? '',
+                                  },
+                                }))
+                              }
+                            />
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            Bs. {esperado.toFixed(2)}
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              placeholder="0.00"
+                              className="w-full min-w-[120px]"
+                              value={fila?.efectivo_entregado ?? ''}
+                              onChange={(e) =>
+                                setFilasControl((prev) => ({
+                                  ...prev,
+                                  [u.id]: {
+                                    pedidos_habilitado: prev[u.id]?.pedidos_habilitado ?? false,
+                                    efectivo_entregado: e.target.value,
+                                  },
+                                }))
+                              }
+                            />
+                          </TableCell>
+                          <TableCell
+                            className={`text-right tabular-nums font-medium ${
+                              faltante > 0.009 ? 'text-destructive' : 'text-muted-foreground'
+                            }`}
+                          >
+                            {faltante > 0.009 ? `Bs. ${faltante.toFixed(2)}` : '—'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              disabled={guardarControlMutation.isPending}
+                              onClick={() => {
+                                const f = filasControl[u.id];
+                                if (!f) return;
+                                guardarControlMutation.mutate({
+                                  id_usuario: u.id,
+                                  fecha: fechaControlDia,
+                                  pedidos_habilitado: f.pedidos_habilitado,
+                                  efectivo_entregado: parseFloat((f.efectivo_entregado || '0').replace(',', '.')) || 0,
+                                });
+                              }}
+                            >
+                              <Save className="h-4 w-4 mr-1" />
+                              Guardar
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Table */}
         <Card>
           <CardHeader>
@@ -338,7 +540,7 @@ export default function ControlVentas() {
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              {format(new Date(sale.fecha), 'dd/MM/yyyy', { locale: es })}
+                              {formatDateOnlyLocal(sale.fecha)}
                             </TableCell>
                             <TableCell className="text-right font-medium">
                               Bs. {parseFloat(sale.total || '0').toFixed(2)}
@@ -450,7 +652,7 @@ export default function ControlVentas() {
                 <div>
                   <Label className="text-muted-foreground">Fecha</Label>
                   <p className="font-medium">
-                    {format(new Date(selectedSale.fecha), 'dd/MM/yyyy', { locale: es })}
+                    {formatDateOnlyLocal(selectedSale.fecha)}
                   </p>
                 </div>
                 <div>

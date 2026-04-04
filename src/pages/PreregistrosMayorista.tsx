@@ -99,6 +99,15 @@ export default function PreregistrosMayorista() {
     return Array.from(map.values());
   }, [preregistros]);
 
+  /** Fecha legible para el diálogo de gestión (si el preregistro la tiene). */
+  const fechaGestionLabel = useMemo(() => {
+    const raw = preregistrosDelMayorista.find((p) => p.fecha)?.fecha;
+    if (!raw) return null;
+    const [year, month, day] = raw.split('-');
+    if (!year || !month || !day) return null;
+    return `${day}/${month}/${year}`;
+  }, [preregistrosDelMayorista]);
+
   const loadPreregistros = async () => {
     try {
       setIsLoading(true);
@@ -493,10 +502,8 @@ export default function PreregistrosMayorista() {
                 Gestionar Productos - {mayoristasUnicos.find(m => m.id === selectedMayoristaForManage)?.nombre || 'N/A'}
               </DialogTitle>
               <DialogDescription>
-                Agrega, edita o elimina productos de este mayorista para la fecha {fecha ? (() => {
-                  const [year, month, day] = fecha.split('-');
-                  return `${day}/${month}/${year}`;
-                })() : ''}.
+                Agrega, edita o elimina productos de este mayorista
+                {fechaGestionLabel ? ` para la fecha ${fechaGestionLabel}` : ''}.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">

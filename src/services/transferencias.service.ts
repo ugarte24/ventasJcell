@@ -216,5 +216,17 @@ export const transferenciasService = {
       minorista_destino: minoristaDestino || undefined,
     } as TransferenciaSaldo;
   },
+
+  /** Marca como canceladas las transferencias pendientes ligadas a una venta (admin / reapertura edición). */
+  async cancelarPendientesPorVentaOrigen(idVentaOrigen: string): Promise<void> {
+    const updatedAt = getLocalDateTimeISO();
+    const { error } = await supabase
+      .from('transferencias_saldos')
+      .update({ estado: 'cancelada', updated_at: updatedAt })
+      .eq('id_venta_origen', idVentaOrigen)
+      .eq('estado', 'pendiente');
+
+    if (error) throw new Error(handleSupabaseError(error));
+  },
 };
 

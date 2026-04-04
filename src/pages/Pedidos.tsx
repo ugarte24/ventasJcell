@@ -80,7 +80,8 @@ import {
   XCircle,
   Clock,
   Search,
-  ChevronsUpDown
+  ChevronsUpDown,
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '@/contexts';
 import { toast } from 'sonner';
@@ -91,9 +92,12 @@ import { preregistrosService } from '@/services/preregistros.service';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
+import { cn, getLocalDateISO } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
-import { getLocalDateISO } from '@/lib/utils';
+import { usuarioControlDiarioService } from '@/services/usuario-control-diario.service';
+import { ventasMinoristasService } from '@/services/ventas-minoristas.service';
+import { ventasMayoristasService } from '@/services/ventas-mayoristas.service';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function Pedidos() {
   const { user } = useAuth();
@@ -198,6 +202,31 @@ export default function Pedidos() {
       setCurrentPage(1);
     }
   }, [pedidosFiltrados.length, currentPage, totalPages]);
+
+  const { data: pedidosGate } = useQuery({
+    queryKey: ['pedidos-gate', user?.id, user?.rol],
+    queryFn: async () => {
+      if (!user || (user.rol !== 'minorista' && user.rol !== 'mayorista')) {
+        return { puede: true as const };
+      }
+      const fecha = getLocalDateISO();
+      const control = await usuarioControlDiarioService.getByUsuarioYFecha(user.id, fecha);
+      if (control?.pedidos_habilitado) {
+        return { puede: true as const };
+      }
+      if (user.rol === 'minorista') {
+        const hay = await ventasMinoristasService.hasVentaRegistradaDesdeNuevaVentaEnFecha(user.id, fecha);
+        if (hay) return { puede: false as const, motivo: 'venta' as const };
+      } else {
+        const hay = await ventasMayoristasService.hasVentaRegistradaDesdeNuevaVentaEnFecha(user.id, fecha);
+        if (hay) return { puede: false as const, motivo: 'venta' as const };
+      }
+      return { puede: true as const };
+    },
+    enabled: !!user && (user.rol === 'minorista' || user.rol === 'mayorista'),
+  });
+
+  const puedeCrearPedido = pedidosGate?.puede !== false;
 
   // Mutación para crear pedido
   const createPedidoMutation = useMutation({
@@ -447,11 +476,33 @@ export default function Pedidos() {
               Visualiza y gestiona todos tus pedidos de productos basados en tus preregistros
             </p>
           </div>
-          <Button onClick={handleOpenCreateDialog} className="gap-2">
+          <Button
+            onClick={handleOpenCreateDialog}
+            className="gap-2"
+            disabled={!puedeCrearPedido}
+            title={
+              !puedeCrearPedido
+                ? 'Un administrador debe habilitar pedidos para hoy en Control de usuarios mayoristas y minoristas'
+                : undefined
+            }
+          >
             <Plus className="h-4 w-4" />
             Nuevo Pedido
           </Button>
         </div>
+
+        {!puedeCrearPedido && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Pedidos no disponibles hoy</AlertTitle>
+            <AlertDescription>
+              Finalizaste la venta desde Nueva venta. Un administrador debe habilitar &quot;Pedidos (solo esta
+              fecha)&quot; para tu usuario en{' '}
+              <strong>Control de usuarios mayoristas y minoristas</strong> (menú Control de ventas). Esa
+              habilitación aplica únicamente al día indicado.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Stats Cards */}
         <div className="grid gap-4 md:grid-cols-4">

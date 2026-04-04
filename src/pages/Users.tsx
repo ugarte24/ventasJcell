@@ -70,6 +70,7 @@ import {
 } from 'lucide-react';
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser, useToggleUserStatus, useUpdateUserPassword } from '@/hooks/useUsers';
 import { usersService, type UpdateUserData } from '@/services/users.service';
+import { minoristaRevisionVentaService } from '@/services/minorista-revision-venta.service';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts';
 import { toast } from 'sonner';
@@ -204,11 +205,31 @@ export default function Users() {
       if (selectedUser.rol === 'minorista' && typeof edicion_preregistro_nueva_venta_permitida === 'boolean') {
         updates.edicion_preregistro_nueva_venta_permitida = edicion_preregistro_nueva_venta_permitida;
       }
+
+      const pasaAHabilitarEdicion =
+        selectedUser.rol === 'minorista' &&
+        currentUser?.rol === 'admin' &&
+        currentUser?.id &&
+        typeof edicion_preregistro_nueva_venta_permitida === 'boolean' &&
+        edicion_preregistro_nueva_venta_permitida === true &&
+        selectedUser.edicion_preregistro_nueva_venta_permitida !== true;
+
+      if (pasaAHabilitarEdicion) {
+        await minoristaRevisionVentaService.anularUltimaVentaNuevaVentaAlHabilitarEdicion(
+          selectedUser.id,
+          currentUser.id
+        );
+      }
+
       await updateUserMutation.mutateAsync({
         id: selectedUser.id,
         updates,
       });
-      toast.success('Usuario actualizado exitosamente');
+      toast.success(
+        pasaAHabilitarEdicion
+          ? 'Usuario actualizado. Se anuló la venta desde Nueva venta para que el minorista pueda corregir y volver a finalizar.'
+          : 'Usuario actualizado exitosamente'
+      );
       setIsEditDialogOpen(false);
       setSelectedUser(null);
       updateForm.reset();
@@ -845,8 +866,10 @@ export default function Users() {
                     <div className="space-y-0.5">
                       <Label htmlFor="edit-edicion-preregistro">Editar saldos en Nueva venta</Label>
                       <p className="text-xs text-muted-foreground">
-                        Desactívalo para impedir cambios en el preregistro. Tras finalizar una venta el sistema lo
-                        bloquea automáticamente hasta que lo vuelvas a activar.
+                        Tras finalizar una venta el sistema bloquea la edición. Si vuelves a activar esta opción, se
+                        <strong> anulará automáticamente</strong> la última venta generada desde Nueva venta (se revierte
+                        stock, saldos del preregistro y transferencias QR pendientes) para que el minorista corrija y
+                        vuelva a finalizar.
                       </p>
                     </div>
                     <Switch

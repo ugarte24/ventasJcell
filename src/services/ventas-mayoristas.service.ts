@@ -268,4 +268,18 @@ export const ventasMayoristasService = {
     const ventas = await this.getAll(filters);
     return ventas.reduce((sum, venta) => sum + (venta.cantidad_vendida * venta.precio_por_mayor), 0);
   },
+
+  /** Líneas creadas al finalizar desde Nueva venta (preregistro), mismo criterio que minorista. */
+  async hasVentaRegistradaDesdeNuevaVentaEnFecha(idMayorista: string, fechaISO: string): Promise<boolean> {
+    const { data, error } = await supabase
+      .from('ventas_mayoristas')
+      .select('id')
+      .eq('id_mayorista', idMayorista)
+      .eq('fecha', fechaISO)
+      .ilike('observaciones', '%Venta registrada desde preregistros%')
+      .limit(1);
+
+    if (error) throw new Error(handleSupabaseError(error));
+    return (data?.length ?? 0) > 0;
+  },
 };

@@ -277,4 +277,44 @@ export const ventasMinoristasService = {
     const ventas = await this.getAll(filters);
     return ventas.reduce((sum, venta) => sum + (venta.cantidad_vendida * venta.precio_unitario), 0);
   },
+
+  /**
+   * ID de venta (`ventas.id`) de la última finalización desde Nueva venta (observaciones recientes).
+   */
+  async findUltimaVentaIdDesdeNuevaVenta(idMinorista: string): Promise<string | null> {
+    const { data, error } = await supabase
+      .from('ventas_minoristas')
+      .select('observaciones, created_at')
+      .eq('id_minorista', idMinorista)
+      .ilike('observaciones', '%Venta registrada desde preregistros%')
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (error) throw new Error(handleSupabaseError(error));
+    if (!data?.length) return null;
+
+    for (const row of data) {
+      const m = row.observaciones?.match(/Venta #([0-9a-f-]{36})/i);
+      if (m?.[1]) return m[1];
+    }
+    return null;
+  },
+
+  async getLineasDesdeNuevaVentaPorVentaId(idVenta: string): Promise<
+    Array<{ id: string; id_producto: string; cantidad_vendida: number }>
+  > {
+    const { data, error } = await supabase
+      .from('ventas_minoristas')
+      .select('id, id_producto, cantidad_vendida')
+      .ilike('observaciones', `%Venta #${idVenta}%`);
+
+    if (error) throw new Error(handleSupabaseError(error));
+    return (data || []) as Array<{ id: string; id_producto: string; cantidad_vendida: number }>;
+  },
+
+  async deleteLineasByIds(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    const { error } = await supabase.from('ventas_minoristas').delete().in('id', ids);
+    if (error) throw new Error(handleSupabaseError(error));
+  },
 };

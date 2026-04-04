@@ -55,6 +55,27 @@ export function getLocalTimeISO(): string {
 }
 
 /**
+ * Convierte una fecha DATE de PostgreSQL (YYYY-MM-DD) en un Date a medianoche **local**.
+ * `new Date("2026-04-02")` interpreta UTC y puede mostrarse como 01/04 en zonas negativas.
+ */
+export function parseDateOnlyLocal(isoDate: string | undefined | null): Date {
+  if (!isoDate) return new Date(NaN);
+  const part = String(isoDate).split('T')[0];
+  const [y, m, d] = part.split('-').map((x) => parseInt(x, 10));
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return new Date(isoDate);
+  return new Date(y, m - 1, d);
+}
+
+/** Muestra YYYY-MM-DD como dd/MM/yyyy sin pasar por UTC. */
+export function formatDateOnlyLocal(isoDate: string | undefined | null): string {
+  if (!isoDate) return '';
+  const part = String(isoDate).split('T')[0];
+  const [y, m, d] = part.split('-');
+  if (!y || !m || !d) return part;
+  return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+}
+
+/**
  * Comprime una imagen si excede el tamaño máximo especificado
  * Usa parámetros conservadores para mantener buena calidad visual
  * @param file Archivo de imagen a comprimir

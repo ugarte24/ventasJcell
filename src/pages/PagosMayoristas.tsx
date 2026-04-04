@@ -64,6 +64,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Textarea } from '@/components/ui/textarea';
+import { formatDateOnlyLocal } from '@/lib/utils';
 
 export default function PagosMayoristas() {
   const { user } = useAuth();
@@ -373,7 +374,7 @@ export default function PagosMayoristas() {
                             {pago.mayorista?.nombre || 'N/A'}
                           </TableCell>
                           <TableCell>
-                            {format(new Date(pago.fecha_pago), 'dd/MM/yyyy', { locale: es })}
+                            {formatDateOnlyLocal(pago.fecha_pago)}
                           </TableCell>
                           <TableCell className="text-right font-medium">
                             Bs. {pago.monto_esperado.toFixed(2)}
@@ -693,7 +694,7 @@ export default function PagosMayoristas() {
                 <div>
                   <Label className="text-muted-foreground">Fecha de Pago</Label>
                   <p className="font-medium">
-                    {format(new Date(selectedPago.fecha_pago), 'dd/MM/yyyy', { locale: es })}
+                    {formatDateOnlyLocal(selectedPago.fecha_pago)}
                   </p>
                 </div>
                 <div>

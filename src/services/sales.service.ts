@@ -140,6 +140,20 @@ export const salesService = {
     return salesWithBalance;
   },
 
+  /** Suma total de ventas en efectivo completadas de un vendedor en una fecha (columna fecha DATE). */
+  async getTotalEfectivoVendedorEnFecha(idVendedor: string, fechaISO: string): Promise<number> {
+    const { data, error } = await supabase
+      .from('ventas')
+      .select('total')
+      .eq('id_vendedor', idVendedor)
+      .eq('fecha', fechaISO)
+      .eq('metodo_pago', 'efectivo')
+      .eq('estado', 'completada');
+
+    if (error) throw new Error(handleSupabaseError(error));
+    return (data || []).reduce((sum, row: { total: number | string }) => sum + parseFloat(String(row.total)), 0);
+  },
+
   async getCreditSales(filters?: {
     estado_credito?: 'pendiente' | 'pagado' | 'parcial' | 'vencido';
     id_cliente?: string;
@@ -452,7 +466,12 @@ export const salesService = {
     return venta as Sale;
   },
 
-  async cancel(id: string, idUsuarioAnulacion?: string, motivoAnulacion?: string): Promise<void> {
+  async cancel(
+    id: string,
+    idUsuarioAnulacion?: string,
+    motivoAnulacion?: string,
+    options?: { bypassSameDayCheck?: boolean }
+  ): Promise<void> {
     // 1. VALIDACIONES ADICIONALES
     // Verificar que la venta existe y no esté ya anulada
     const { data: venta, error: ventaError } = await supabase
@@ -476,16 +495,19 @@ export const salesService = {
       throw new Error('La venta ya está anulada');
     }
 
-    // Validar que la venta sea del mismo día (solo se pueden anular ventas recientes)
     const ahora = new Date();
     const año = ahora.getFullYear();
     const mes = String(ahora.getMonth() + 1).padStart(2, '0');
     const dia = String(ahora.getDate()).padStart(2, '0');
     const fechaHoy = `${año}-${mes}-${dia}`;
 
-    if (venta.fecha !== fechaHoy) {
+    // Validar que la venta sea del mismo día (excepto reapertura admin → minorista)
+    if (!options?.bypassSameDayCheck && venta.fecha !== fechaHoy) {
       throw new Error('Solo se pueden anular ventas del día actual');
     }
+
+    // Fecha del movimiento de inventario: la de la venta anulada
+    const fechaLocal = String(venta.fecha);
 
     // 2. OBTENER DETALLES DE LA VENTA PARA REVERTIR STOCK
     const { data: detalles, error: detallesError } = await supabase
@@ -499,7 +521,6 @@ export const salesService = {
 
     // 3. CREAR MOVIMIENTOS DE INVENTARIO DE ENTRADA Y REVERTIR STOCK
     if (detalles && detalles.length > 0) {
-      const fechaLocal = fechaHoy;
       const createdAt = getLocalDateTimeISO();
 
       // Construir observación con información de auditoría

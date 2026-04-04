@@ -52,11 +52,15 @@ export function useCancelSale() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (params: { 
-      id: string; 
-      idUsuarioAnulacion?: string; 
+    mutationFn: (params: {
+      id: string;
+      idUsuarioAnulacion?: string;
       motivoAnulacion?: string;
-    }) => salesService.cancel(params.id, params.idUsuarioAnulacion, params.motivoAnulacion),
+      bypassSameDayCheck?: boolean;
+    }) =>
+      salesService.cancel(params.id, params.idUsuarioAnulacion, params.motivoAnulacion, {
+        bypassSameDayCheck: params.bypassSameDayCheck,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sales'] });
       queryClient.invalidateQueries({ queryKey: ['products'] }); // Revertir stock

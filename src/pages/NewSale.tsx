@@ -79,6 +79,16 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -179,6 +189,8 @@ export default function NewSale() {
   const [showQRDialog, setShowQRDialog] = useState(false);
   /** Tras finalizar venta se muestra el QR primero; al cerrar el modal debe abrirse el éxito (no al usar "Mostrar QR"). */
   const [showSuccessAfterQrClose, setShowSuccessAfterQrClose] = useState(false);
+  const [showMinoristaFinalizarAdvertencia, setShowMinoristaFinalizarAdvertencia] = useState(false);
+  const [pendingFinalizarCierraSheet, setPendingFinalizarCierraSheet] = useState(false);
   const [qrCode, setQrCode] = useState<string>('');
   const [transferenciaCreada, setTransferenciaCreada] = useState<TransferenciaSaldo | null>(null);
   const [minoristaHayVentaNuevaVentaHoy, setMinoristaHayVentaNuevaVentaHoy] = useState(false);
@@ -875,12 +887,27 @@ export default function NewSale() {
     }
   };
 
+  const abrirAdvertenciaFinalizarVentaMinorista = (cerrarSheetAlConfirmar: boolean) => {
+    setPendingFinalizarCierraSheet(cerrarSheetAlConfirmar);
+    setShowMinoristaFinalizarAdvertencia(true);
+  };
+
+  const confirmarAdvertenciaFinalizarVentaMinorista = () => {
+    const cerrarSheet = pendingFinalizarCierraSheet;
+    setShowMinoristaFinalizarAdvertencia(false);
+    setPendingFinalizarCierraSheet(false);
+    void handleCompleteSale();
+    if (cerrarSheet) setShowCartSheet(false);
+  };
+
   const handleNewSale = () => {
     clearCart();
     setShowSuccessDialog(false);
     setShowArrastrarSaldosDialog(false);
     setShowQRDialog(false);
     setShowSuccessAfterQrClose(false);
+    setShowMinoristaFinalizarAdvertencia(false);
+    setPendingFinalizarCierraSheet(false);
     setSaleTotal(0);
     setSaleItems([]);
     setSaleItemCount(0);
@@ -1794,7 +1821,13 @@ export default function NewSale() {
                         <>
                           <Button
                             className="w-full h-11 sm:h-12 gap-2 text-sm sm:text-base"
-                            onClick={handleCompleteSale}
+                            onClick={() => {
+                              if (user?.rol === 'minorista' && minoristaPuedeEditarPreregistro) {
+                                abrirAdvertenciaFinalizarVentaMinorista(false);
+                              } else {
+                                void handleCompleteSale();
+                              }
+                            }}
                             disabled={
                               preregistroItems.filter(
                                 (item) =>
@@ -2723,8 +2756,12 @@ export default function NewSale() {
                         <Button
                           className="h-12 w-full gap-2 text-base"
                           onClick={() => {
-                            void handleCompleteSale();
-                            setShowCartSheet(false);
+                            if (user?.rol === 'minorista' && minoristaPuedeEditarPreregistro) {
+                              abrirAdvertenciaFinalizarVentaMinorista(true);
+                            } else {
+                              void handleCompleteSale();
+                              setShowCartSheet(false);
+                            }
                           }}
                           disabled={
                             preregistroItems.filter(
@@ -2819,6 +2856,41 @@ export default function NewSale() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Advertencia antes de finalizar venta (minorista) */}
+      <AlertDialog
+        open={showMinoristaFinalizarAdvertencia}
+        onOpenChange={(open) => {
+          setShowMinoristaFinalizarAdvertencia(open);
+          if (!open) setPendingFinalizarCierraSheet(false);
+        }}
+      >
+        <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display">Advertencia</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-left text-foreground">
+                <p>
+                  Si finalizas la venta, <strong>no podrás editar</strong> el preregistro ni los saldos de esta
+                  jornada.
+                </p>
+                <p>
+                  Tampoco podrás <strong>solicitar pedidos</strong> hasta que un administrador habilite pedidos para
+                  ese día en <strong>Control de usuarios mayoristas y minoristas</strong> (Control de ventas). Esa
+                  autorización solo vale para la fecha que elija el administrador.
+                </p>
+                <p className="text-sm text-muted-foreground">¿Deseas continuar?</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction type="button" onClick={() => confirmarAdvertenciaFinalizarVentaMinorista()}>
+              Aceptar y finalizar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Dialog para generar QR (Minoristas) */}
       <Dialog
