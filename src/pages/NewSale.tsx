@@ -16,6 +16,7 @@ import { ventasMinoristasService } from '@/services/ventas-minoristas.service';
 import { ventasMayoristasService } from '@/services/ventas-mayoristas.service';
 import { getLocalDateISO, getLocalTimeISO } from '@/lib/utils';
 import { printTicket } from '@/utils/print';
+import { QRCodeSVG } from 'qrcode.react';
 import { salesService } from '@/services/sales.service';
 import { usersService } from '@/services/users.service';
 import { Input } from '@/components/ui/input';
@@ -2822,10 +2823,17 @@ export default function NewSale() {
             {qrCode ? (
               <div className="flex flex-col items-center space-y-4">
                 <div className="p-4 bg-white rounded-lg border-2 border-primary">
-                  <div className="text-center font-mono text-xs break-all p-2 bg-muted rounded">
-                    {qrCode}
-                  </div>
+                  <QRCodeSVG
+                    value={qrCode}
+                    size={220}
+                    level="M"
+                    includeMargin
+                    className="mx-auto block"
+                  />
                 </div>
+                <p className="text-xs font-mono text-muted-foreground text-center break-all max-w-full px-1">
+                  {qrCode}
+                </p>
                 <p className="text-sm text-muted-foreground text-center">
                   Comparte este código con otro minorista para que pueda escanearlo y recibir tus saldos restantes.
                 </p>
