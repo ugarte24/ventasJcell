@@ -177,6 +177,8 @@ export default function NewSale() {
   
   // Estados para minoristas: generar QR
   const [showQRDialog, setShowQRDialog] = useState(false);
+  /** Tras finalizar venta se muestra el QR primero; al cerrar el modal debe abrirse el éxito (no al usar "Mostrar QR"). */
+  const [showSuccessAfterQrClose, setShowSuccessAfterQrClose] = useState(false);
   const [qrCode, setQrCode] = useState<string>('');
   const [transferenciaCreada, setTransferenciaCreada] = useState<TransferenciaSaldo | null>(null);
   const [minoristaHayVentaNuevaVentaHoy, setMinoristaHayVentaNuevaVentaHoy] = useState(false);
@@ -767,6 +769,7 @@ export default function NewSale() {
         if (user.rol === 'mayorista') {
           setShowArrastrarSaldosDialog(true);
         } else if (user.rol === 'minorista' && transferenciaMinorista) {
+          setShowSuccessAfterQrClose(true);
           setShowQRDialog(true);
         } else {
           setShowSuccessDialog(true);
@@ -877,6 +880,7 @@ export default function NewSale() {
     setShowSuccessDialog(false);
     setShowArrastrarSaldosDialog(false);
     setShowQRDialog(false);
+    setShowSuccessAfterQrClose(false);
     setSaleTotal(0);
     setSaleItems([]);
     setSaleItemCount(0);
@@ -1765,7 +1769,10 @@ export default function NewSale() {
                             <Button
                               type="button"
                               className="w-full h-11 sm:h-12 gap-2 text-sm sm:text-base"
-                              onClick={() => setShowQRDialog(true)}
+                              onClick={() => {
+                                setShowSuccessAfterQrClose(false);
+                                setShowQRDialog(true);
+                              }}
                             >
                               <QrCode className="h-5 w-5" />
                               Mostrar QR
@@ -2682,7 +2689,10 @@ export default function NewSale() {
                           <Button
                             type="button"
                             className="h-12 w-full gap-2 text-base"
-                            onClick={() => setShowQRDialog(true)}
+                            onClick={() => {
+                              setShowSuccessAfterQrClose(false);
+                              setShowQRDialog(true);
+                            }}
                           >
                             <QrCode className="h-5 w-5" />
                             Mostrar QR
@@ -2811,7 +2821,16 @@ export default function NewSale() {
       </Dialog>
 
       {/* Dialog para generar QR (Minoristas) */}
-      <Dialog open={showQRDialog} onOpenChange={setShowQRDialog}>
+      <Dialog
+        open={showQRDialog}
+        onOpenChange={(open) => {
+          setShowQRDialog(open);
+          if (!open && showSuccessAfterQrClose) {
+            setShowSuccessAfterQrClose(false);
+            setShowSuccessDialog(true);
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader className="text-center">
             <DialogTitle className="font-display text-xl">Transferir Saldos Restantes</DialogTitle>
@@ -2854,14 +2873,6 @@ export default function NewSale() {
               </p>
             )}
           </div>
-          <DialogFooter>
-            <Button className="w-full" onClick={() => {
-              setShowQRDialog(false);
-              setShowSuccessDialog(true);
-            }}>
-              Continuar
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
