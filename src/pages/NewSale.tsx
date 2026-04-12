@@ -1511,7 +1511,7 @@ export default function NewSale() {
                       <div className="rounded-lg border -mx-4 sm:-mx-6 lg:mx-0 overflow-hidden">
                         <div className="p-2 sm:p-4 lg:p-6">
                           <div
-                            className="overflow-x-auto overscroll-x-contain touch-pan-x"
+                            className="overflow-x-auto overscroll-x-contain"
                             style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'thin' }}
                           >
                             <table className="w-full caption-bottom text-xs sm:text-sm">
@@ -1590,7 +1590,7 @@ export default function NewSale() {
                     )}
                     <div className="rounded-lg border -mx-4 sm:-mx-6 lg:mx-0 overflow-hidden">
                       <div className="p-2 sm:p-4 lg:p-6">
-                        <div className="overflow-x-auto overscroll-x-contain touch-pan-x" style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'thin' }}>
+                        <div className="overflow-x-auto overscroll-x-contain" style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'thin' }}>
                           <table className="w-full caption-bottom text-xs sm:text-sm">
                             <thead className="[&_tr]:border-b">
                               <tr className="border-b transition-colors">
