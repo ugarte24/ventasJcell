@@ -16,14 +16,20 @@ import { saldosRestantesMayoristasService } from '@/services/saldos-restantes-ma
 import { pagosMayoristasService } from '@/services/pagos-mayoristas.service';
 import { ventasMinoristasService } from '@/services/ventas-minoristas.service';
 import { ventasMayoristasService } from '@/services/ventas-mayoristas.service';
-import { getLocalDateISO, getLocalTimeISO } from '@/lib/utils';
+import {
+  getLocalDateISO,
+  getLocalTimeISO,
+  formatDateOnlyLocal,
+  parseDateOnlyLocal,
+} from '@/lib/utils';
 import { printTicket } from '@/utils/print';
 import { QRCodeSVG } from 'qrcode.react';
 import { salesService } from '@/services/sales.service';
 import { usersService } from '@/services/users.service';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Calendar } from '@/components/ui/calendar';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -53,7 +59,8 @@ import {
   User,
   Edit,
   X,
-  ClipboardList
+  ClipboardList,
+  CalendarDays,
 } from 'lucide-react';
 import {
   Command,
@@ -128,8 +135,9 @@ function bucketPreregistroItem(
   return 'otros';
 }
 
-function formatFechaVentaLocalLegible(): string {
-  const [y, m, d] = getLocalDateISO().split('-').map(Number);
+function formatFechaISOLocalLegible(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return iso;
   const s = new Date(y, m - 1, d).toLocaleDateString('es-BO', {
     weekday: 'long',
     day: 'numeric',
@@ -137,6 +145,13 @@ function formatFechaVentaLocalLegible(): string {
     year: 'numeric',
   });
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function fechaLocalToISO(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function minoristaJornadaIniciadaStorageKey(userId: string, fechaISO: string) {
@@ -206,6 +221,16 @@ export default function NewSale() {
   const [minoristaHayVentaNuevaVentaHoy, setMinoristaHayVentaNuevaVentaHoy] = useState(false);
   const [minoristaJornadaIniciadaHoy, setMinoristaJornadaIniciadaHoy] = useState(false);
   const [iniciandoJornadaMinorista, setIniciandoJornadaMinorista] = useState(false);
+  /** Fecha consultada en la tarjeta de preregistro (minorista); venta / jornada / QR solo aplican si es hoy. */
+  const [fechaVistaMinorista, setFechaVistaMinorista] = useState(() => getLocalDateISO());
+  const [calendarioMinoristaOpen, setCalendarioMinoristaOpen] = useState(false);
+  const [calendarMonthMinorista, setCalendarMonthMinorista] = useState<Date>(() =>
+    parseDateOnlyLocal(getLocalDateISO())
+  );
+
+  useEffect(() => {
+    setCalendarMonthMinorista(parseDateOnlyLocal(fechaVistaMinorista));
+  }, [fechaVistaMinorista]);
 
   const { data: minoristaUltimaFechaFinalizadaVenta } = useQuery({
     queryKey: ['minorista-ultima-finalizada-preregistro', user?.id],
@@ -214,6 +239,28 @@ export default function NewSale() {
       return ventasMinoristasService.getUltimaFechaVentaDesdeNuevaVenta(user.id);
     },
     enabled: !!user && user.rol === 'minorista',
+  });
+
+  const fechaResumenVentasDia = user?.rol === 'minorista' ? fechaVistaMinorista : fechaHoy;
+
+  const {
+    data: ventasRegistradasResumenRaw = [],
+    isPending: cargandoVentasResumenDia,
+  } = useQuery({
+    queryKey: ['preregistro-resumen-ventas-dia', user?.id, user?.rol, fechaResumenVentasDia],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      if (user.rol === 'minorista') {
+        const v = await ventasMinoristasService.getVentasDelDia(user.id, fechaVistaMinorista);
+        return v.filter((row) => row.cantidad_vendida > 0);
+      }
+      if (user.rol === 'mayorista') {
+        const v = await ventasMayoristasService.getVentasDelPeriodo(user.id, fechaHoy, fechaHoy);
+        return v.filter((row) => row.cantidad_vendida > 0);
+      }
+      return [];
+    },
+    enabled: !!user?.id && (user.rol === 'minorista' || user.rol === 'mayorista'),
   });
 
   const minoristaPuedeEditarPreregistro = useMemo(() => {
@@ -243,6 +290,20 @@ export default function NewSale() {
     minoristaJornadaIniciadaHoy,
     fechaHoy,
   ]);
+
+  const minoristaConsultaEsHoy =
+    user?.rol !== 'minorista' || fechaVistaMinorista === getLocalDateISO();
+
+  const minoristaBloqueadoPorJornadaPendienteVista =
+    minoristaBloqueadoPorJornadaPendiente && minoristaConsultaEsHoy;
+
+  const handleCalendarioMinoristaSelect = useCallback((d: Date | undefined) => {
+    if (!d) return;
+    const picked = fechaLocalToISO(d);
+    if (picked > getLocalDateISO()) return;
+    setFechaVistaMinorista(picked);
+    setCalendarioMinoristaOpen(false);
+  }, []);
 
   useEffect(() => {
     if (user?.rol !== 'minorista' || !user.id) {
@@ -335,28 +396,45 @@ export default function NewSale() {
 
       try {
         setIsLoadingPreregistros(true);
-        const fechaActual = getLocalDateISO();
-        
+        const hoyISO = getLocalDateISO();
+        const fechaActual = user.rol === 'minorista' ? fechaVistaMinorista : hoyISO;
+
         if (user.rol === 'minorista') {
           // Cargar preregistros del minorista actual (sin filtrar por fecha, son reutilizables)
           const preregistros = await preregistrosService.getPreregistrosMinorista(user.id);
-          
-          // Cargar aumentos del día desde ventas_minoristas
+
+          // Cargar aumentos del día consultado desde ventas_minoristas
           const aumentosDelDia = await ventasMinoristasService.getAumentosDelDia(user.id, fechaActual);
-          
+
+          const ventasDelDiaHistorial =
+            fechaActual !== hoyISO
+              ? await ventasMinoristasService.getVentasDelDia(user.id, fechaActual)
+              : [];
+
+          const vendidoPorProducto = new Map<string, number>();
+          if (fechaActual !== hoyISO) {
+            ventasDelDiaHistorial.forEach((v) => {
+              const prev = vendidoPorProducto.get(v.id_producto) || 0;
+              vendidoPorProducto.set(v.id_producto, prev + (v.cantidad_vendida || 0));
+            });
+          }
+
           // Crear un mapa de aumentos por producto
           const aumentosPorProducto = new Map<string, number>();
-          aumentosDelDia.forEach(aumento => {
+          aumentosDelDia.forEach((aumento) => {
             const actual = aumentosPorProducto.get(aumento.id_producto) || 0;
             aumentosPorProducto.set(aumento.id_producto, actual + aumento.cantidad_aumento);
           });
-          
-          const items: PreregistroVentaItem[] = preregistros.map(p => {
+
+          const items: PreregistroVentaItem[] = preregistros.map((p) => {
             const aumento = aumentosPorProducto.get(p.id_producto) || 0;
+            const vendido = fechaActual !== hoyISO ? vendidoPorProducto.get(p.id_producto) || 0 : 0;
             const saldoDisponible = p.cantidad + aumento;
 
             let cantidadRestante: number;
-            if (p.cantidad_restante != null && !Number.isNaN(Number(p.cantidad_restante))) {
+            if (fechaActual !== hoyISO) {
+              cantidadRestante = Math.max(0, saldoDisponible - vendido);
+            } else if (p.cantidad_restante != null && !Number.isNaN(Number(p.cantidad_restante))) {
               cantidadRestante = Math.max(0, Math.min(Number(p.cantidad_restante), saldoDisponible));
             } else {
               const storageKey = `preregistro_saldo_${user.id}_${p.id}`;
@@ -452,10 +530,14 @@ export default function NewSale() {
     };
 
     loadPreregistros();
-  }, [user, location.pathname]);
+  }, [user, location.pathname, fechaVistaMinorista]);
 
   const handleIniciarJornadaMinorista = useCallback(async () => {
     if (!user || user.rol !== 'minorista') return;
+    if (fechaVistaMinorista !== getLocalDateISO()) {
+      toast.error('Solo podés crear la nueva venta en la fecha de hoy. Elegí hoy en el calendario.');
+      return;
+    }
     if (preregistroItems.length === 0) {
       toast.error('No hay preregistros');
       return;
@@ -488,10 +570,14 @@ export default function NewSale() {
     } finally {
       setIniciandoJornadaMinorista(false);
     }
-  }, [user, preregistroItems, queryClient, fechaHoy]);
+  }, [user, preregistroItems, queryClient, fechaHoy, fechaVistaMinorista]);
 
   const handleUpdateCantidadRestante = async (itemId: string, newValue: number) => {
     if (!user) return;
+    if (user.rol === 'minorista' && fechaVistaMinorista !== getLocalDateISO()) {
+      toast.error('Solo podés editar saldos en la fecha de hoy.');
+      return;
+    }
     if (user.rol === 'minorista' && minoristaBloqueadoPorJornadaPendiente) {
       toast.error('Iniciá la nueva jornada antes de editar saldos.');
       return;
@@ -542,15 +628,61 @@ export default function NewSale() {
   // Los aumentos ahora se registran automáticamente cuando se entregan pedidos
   // y se cargan desde las tablas ventas_minoristas/ventas_mayoristas.
 
-  // Calcular total de preregistros
+  // Calcular total de preregistros (tabla; borrador hasta finalizar)
   const preregistroTotal = useMemo(() => {
     return preregistroItems.reduce((sum, item) => sum + item.subtotal, 0);
   }, [preregistroItems]);
 
-  // Tarjeta / Recarga / Chip (totales del resumen preregistro)
+  /** Líneas de venta reales en BD para la fecha del resumen (minorista: calendario; mayorista: hoy). */
+  const lineasResumenVentasRegistradas = useMemo(() => {
+    type Acc = {
+      id_producto: string;
+      nombre: string;
+      id_categoria?: string;
+      cantidadVendida: number;
+      subtotal: number;
+    };
+    const map = new Map<string, Acc>();
+    for (const v of ventasRegistradasResumenRaw) {
+      const nombre = v.producto?.nombre || 'N/A';
+      const idCat = v.producto?.id_categoria;
+      const precio = 'precio_por_mayor' in v ? v.precio_por_mayor : v.precio_unitario;
+      const lineSub = v.cantidad_vendida * precio;
+      const prev = map.get(v.id_producto);
+      if (prev) {
+        prev.cantidadVendida += v.cantidad_vendida;
+        prev.subtotal += lineSub;
+      } else {
+        map.set(v.id_producto, {
+          id_producto: v.id_producto,
+          nombre,
+          id_categoria: idCat,
+          cantidadVendida: v.cantidad_vendida,
+          subtotal: lineSub,
+        });
+      }
+    }
+    return [...map.values()]
+      .map((row) => ({
+        key: row.id_producto,
+        nombre: row.nombre,
+        id_categoria: row.id_categoria,
+        cantidadVendida: row.cantidadVendida,
+        precioUnitario: row.cantidadVendida > 0 ? row.subtotal / row.cantidadVendida : 0,
+        subtotal: row.subtotal,
+      }))
+      .reverse();
+  }, [ventasRegistradasResumenRaw]);
+
+  const resumenTotalVentasRegistradasDia = useMemo(
+    () => lineasResumenVentasRegistradas.reduce((s, x) => s + x.subtotal, 0),
+    [lineasResumenVentasRegistradas]
+  );
+
+  /** Tarjeta / Recarga / Chip según ventas registradas en `ventas_*` ese día (panel Resumen). */
   const resumenTarjetaRecargaChip = useMemo(() => {
     const acc = { tarjeta: 0, recarga: 0, chip: 0, otros: 0 };
-    preregistroItems.forEach((item) => {
+    lineasResumenVentasRegistradas.forEach((item) => {
       const catNombre = item.id_categoria
         ? categories.find((x) => x.id === item.id_categoria)?.nombre
         : undefined;
@@ -566,7 +698,7 @@ export default function NewSale() {
       rows.push({ key: 'otros', nombre: 'Otros', total: acc.otros });
     }
     return rows;
-  }, [preregistroItems, categories]);
+  }, [lineasResumenVentasRegistradas, categories]);
 
   /** Alias del resumen preregistro (antes `resumenPorCategoria`). Evita ReferenceError si queda código o caché de HMR con el nombre antiguo. */
   const resumenPorCategoria = resumenTarjetaRecargaChip;
@@ -597,9 +729,13 @@ export default function NewSale() {
 
     // Si es minorista o mayorista, usar preregistros
     if (user.rol === 'minorista' || user.rol === 'mayorista') {
+      if (user.rol === 'minorista' && fechaVistaMinorista !== getLocalDateISO()) {
+        toast.error('Solo podés finalizar la venta en la fecha de hoy. Volvé al día actual en el calendario.');
+        return;
+      }
       if (user.rol === 'minorista' && minoristaBloqueadoPorJornadaPendiente) {
         toast.error(
-          'Iniciá la nueva jornada (botón en preregistros) o cargá saldos con QR antes de finalizar.'
+          'Iniciá la nueva jornada (botón en Ventas del día) o cargá saldos con QR antes de finalizar.'
         );
         return;
       }
@@ -710,6 +846,7 @@ export default function NewSale() {
           setMinoristaHayVentaNuevaVentaHoy(true);
           void queryClient.invalidateQueries({ queryKey: ['minorista-ultima-finalizada-preregistro'] });
           void queryClient.invalidateQueries({ queryKey: ['pedidos-gate'] });
+          void queryClient.invalidateQueries({ queryKey: ['preregistro-resumen-ventas-dia'] });
         } else if (user.rol === 'mayorista') {
           // Crear registros en ventas_mayoristas para cada producto vendido
           try {
@@ -742,6 +879,7 @@ export default function NewSale() {
             toast.error(`Error al registrar ventas mayoristas: ${error.message || 'Error desconocido'}`);
             // No retornar aquí, permitir que continúe el flujo
           }
+          void queryClient.invalidateQueries({ queryKey: ['preregistro-resumen-ventas-dia'] });
         }
 
         // Guardar datos de la venta
@@ -1154,7 +1292,13 @@ export default function NewSale() {
   return (
     <DashboardLayout title="Nueva Venta">
       {/* Botón flotante del carrito/resumen - Tablet y móvil (cuando NO es desktop grande) */}
-      {shouldShowSheet && (
+      {shouldShowSheet &&
+        !(
+          user?.rol === 'minorista' &&
+          !minoristaConsultaEsHoy &&
+          !cargandoVentasResumenDia &&
+          lineasResumenVentasRegistradas.length === 0
+        ) && (
         <Button
           onClick={() => setShowCartSheet(true)}
           className="fixed bottom-6 right-6 z-[100] h-14 w-14 rounded-full shadow-lg"
@@ -1179,10 +1323,61 @@ export default function NewSale() {
           {/* Mostrar tabla de preregistros si es minorista o mayorista */}
           {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
             <Card className="animate-fade-in">
-              <CardHeader>
-                <CardTitle>
-                  {user.rol === 'minorista' ? 'Preregistros Minorista' : 'Preregistros Mayorista'}
-                </CardTitle>
+              <CardHeader className="space-y-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <CardTitle className="text-xl">
+                    {user.rol === 'minorista'
+                      ? minoristaConsultaEsHoy
+                        ? 'Ventas del día (Minorista)'
+                        : 'Consulta (Minorista)'
+                      : 'Preregistros Mayorista'}
+                  </CardTitle>
+                  {user.rol === 'minorista' && (
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <Popover open={calendarioMinoristaOpen} onOpenChange={setCalendarioMinoristaOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-2 justify-start min-w-[200px] sm:min-w-[220px]"
+                          >
+                            <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                            <span className="truncate">{formatDateOnlyLocal(fechaVistaMinorista)}</span>
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="end">
+                          <Calendar
+                            mode="single"
+                            month={calendarMonthMinorista}
+                            onMonthChange={setCalendarMonthMinorista}
+                            selected={parseDateOnlyLocal(fechaVistaMinorista)}
+                            onSelect={handleCalendarioMinoristaSelect}
+                            disabled={(date) => fechaLocalToISO(date) > getLocalDateISO()}
+                            className="rounded-md border"
+                          />
+                          <div className="border-t p-2 flex justify-center">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              disabled={fechaVistaMinorista === getLocalDateISO()}
+                              onClick={() => setFechaVistaMinorista(getLocalDateISO())}
+                            >
+                              Ir a hoy
+                            </Button>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  )}
+                </div>
+                {user.rol === 'minorista' && (
+                  <CardDescription className="text-xs">
+                    En fechas pasadas solo verás detalle si hubo ventas finalizadas ese día; si no hubo, no se muestra
+                    tabla. Crear nueva venta, escanear QR y editar saldos solo están habilitados en la fecha de hoy.
+                  </CardDescription>
+                )}
               </CardHeader>
               <CardContent>
                 {isLoadingPreregistros ? (
@@ -1191,9 +1386,9 @@ export default function NewSale() {
                   </div>
                 ) : preregistroItems.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    No hay preregistros para el día de hoy
+                    No hay preregistros asignados
                   </div>
-                ) : user?.rol === 'minorista' && minoristaBloqueadoPorJornadaPendiente ? (
+                ) : user?.rol === 'minorista' && minoristaBloqueadoPorJornadaPendienteVista ? (
                   <div className="space-y-6 py-2">
                     <Alert>
                       <AlertDescription>
@@ -1206,7 +1401,11 @@ export default function NewSale() {
                         type="button"
                         className="h-12 gap-2 text-base w-full sm:w-auto sm:min-w-[220px]"
                         onClick={() => void handleIniciarJornadaMinorista()}
-                        disabled={iniciandoJornadaMinorista || preregistroItems.length === 0}
+                        disabled={
+                          iniciandoJornadaMinorista ||
+                          preregistroItems.length === 0 ||
+                          !minoristaConsultaEsHoy
+                        }
                       >
                         {iniciandoJornadaMinorista ? (
                           <>
@@ -1224,7 +1423,14 @@ export default function NewSale() {
                         type="button"
                         variant="outline"
                         className="h-12 gap-2 text-base w-full sm:w-auto sm:min-w-[220px]"
-                        onClick={() => navigate('/escanear-qr')}
+                        disabled={!minoristaConsultaEsHoy}
+                        onClick={() => {
+                          if (!minoristaConsultaEsHoy) {
+                            toast.error('El escaneo por QR solo está disponible en la fecha de hoy.');
+                            return;
+                          }
+                          navigate('/escanear-qr');
+                        }}
                       >
                         <QrCode className="h-5 w-5" />
                         Escaneo por QR
@@ -1233,12 +1439,94 @@ export default function NewSale() {
                     <p className="text-xs text-center text-muted-foreground max-w-xl mx-auto px-1">
                       <strong>Crear nueva venta</strong> deja los saldos al máximo según tu preregistro y los pedidos
                       entregados hoy. <strong>Escaneo por QR</strong> recibe saldos de otro minorista. Cuando veas la
-                      tabla de preregistros podrás abrir <strong>Pedidos</strong> desde ahí.
+                      panel <strong>Ventas del día (Minorista)</strong> podrás abrir <strong>Pedidos</strong> desde ahí.
+                      Usá el calendario arriba para consultar otros días (solo lectura).
                     </p>
                   </div>
+                ) : user?.rol === 'minorista' && !minoristaConsultaEsHoy ? (
+                  cargandoVentasResumenDia ? (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <Loader className="h-8 w-8 animate-spin mx-auto" />
+                      <p className="mt-3 text-sm">Consultando ventas de esta fecha…</p>
+                    </div>
+                  ) : lineasResumenVentasRegistradas.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-14 text-center px-4">
+                      <ClipboardList className="h-14 w-14 text-muted-foreground/50" />
+                      <p className="mt-4 text-muted-foreground max-w-md">
+                        No hubo ventas registradas el <strong>{formatDateOnlyLocal(fechaVistaMinorista)}</strong>.
+                      </p>
+                      <p className="mt-2 text-sm text-muted-foreground max-w-md">
+                        Solo se muestra el detalle en días en los que finalizaste venta desde Nueva venta. Elegí otra
+                        fecha en el calendario o <strong>Ir a hoy</strong> para crear venta o escanear QR.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <Alert>
+                        <AlertDescription>
+                          Ventas del <strong>{formatDateOnlyLocal(fechaVistaMinorista)}</strong> (solo consulta, según
+                          registros guardados).
+                        </AlertDescription>
+                      </Alert>
+                      <div className="rounded-lg border -mx-4 sm:-mx-6 lg:mx-0 overflow-hidden">
+                        <div className="p-2 sm:p-4 lg:p-6">
+                          <div
+                            className="overflow-x-auto overscroll-x-contain touch-pan-x"
+                            style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'thin' }}
+                          >
+                            <table className="w-full caption-bottom text-xs sm:text-sm">
+                              <thead className="[&_tr]:border-b">
+                                <tr className="border-b transition-colors">
+                                  <th className="h-10 sm:h-12 px-1.5 sm:px-2 md:px-4 text-left align-middle font-medium text-muted-foreground text-[10px] sm:text-xs md:text-sm">
+                                    Producto
+                                  </th>
+                                  <th className="h-10 sm:h-12 px-1.5 sm:px-2 md:px-4 text-right align-middle font-medium text-muted-foreground text-[10px] sm:text-xs md:text-sm">
+                                    <span className="hidden sm:inline">Cant. vendida</span>
+                                    <span className="sm:hidden">Cant.</span>
+                                  </th>
+                                  <th className="h-10 sm:h-12 px-1.5 sm:px-2 md:px-4 text-right align-middle font-medium text-muted-foreground text-[10px] sm:text-xs md:text-sm">
+                                    P. unit.
+                                  </th>
+                                  <th className="h-10 sm:h-12 px-1.5 sm:px-2 md:px-4 text-right align-middle font-medium text-muted-foreground text-[10px] sm:text-xs md:text-sm">
+                                    Subtotal
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody className="[&_tr:last-child]:border-0">
+                                {lineasResumenVentasRegistradas.map((row) => (
+                                  <tr key={row.key} className="border-b transition-colors">
+                                    <td className="p-1.5 sm:p-2 md:p-4 align-middle">
+                                      <p className="font-medium text-xs sm:text-sm truncate max-w-[120px] sm:max-w-none">
+                                        {row.nombre}
+                                      </p>
+                                    </td>
+                                    <td className="p-1.5 sm:p-2 md:p-4 align-middle text-right tabular-nums text-xs sm:text-sm">
+                                      {row.cantidadVendida}
+                                    </td>
+                                    <td className="p-1.5 sm:p-2 md:p-4 align-middle text-right tabular-nums text-xs sm:text-sm">
+                                      Bs. {row.precioUnitario.toFixed(2)}
+                                    </td>
+                                    <td className="p-1.5 sm:p-2 md:p-4 align-middle text-right font-semibold tabular-nums text-xs sm:text-sm">
+                                      Bs. {row.subtotal.toFixed(2)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center pt-4 border-t">
+                        <p className="text-lg font-semibold">Total:</p>
+                        <p className="text-2xl font-bold text-primary">
+                          Bs. {resumenTotalVentasRegistradasDia.toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                  )
                 ) : (
                   <div className="space-y-4">
-                    {user?.rol === 'minorista' && minoristaEdicionBloqueada && (
+                    {user?.rol === 'minorista' && minoristaEdicionBloqueada && minoristaConsultaEsHoy && (
                       <Alert>
                         <AlertDescription>
                           Venta finalizada: no puedes editar los saldos del preregistro. Un administrador puede
@@ -1246,7 +1534,7 @@ export default function NewSale() {
                         </AlertDescription>
                       </Alert>
                     )}
-                    {(user?.rol === 'minorista' || user?.rol === 'mayorista') && (
+                    {((user?.rol === 'mayorista') || (user?.rol === 'minorista' && minoristaConsultaEsHoy)) && (
                       <div className="flex justify-end -mx-1">
                         <Button
                           type="button"
@@ -1298,7 +1586,9 @@ export default function NewSale() {
                               {preregistroItems.map((item) => {
                                 const minoristaSaldoBloqueado =
                                   user?.rol === 'minorista' &&
-                                  (!minoristaPuedeEditarPreregistro || minoristaBloqueadoPorJornadaPendiente);
+                                  (!minoristaPuedeEditarPreregistro ||
+                                    (minoristaBloqueadoPorJornadaPendiente && minoristaConsultaEsHoy) ||
+                                    !minoristaConsultaEsHoy);
                                 return (
                                 <tr key={item.id} className="border-b transition-colors hover:bg-muted/50">
                                   <td className="p-1.5 sm:p-2 md:p-4 align-middle">
@@ -1644,7 +1934,9 @@ export default function NewSale() {
               </CardTitle>
               {(user?.rol === 'minorista' || user?.rol === 'mayorista') && (
                 <p className="text-sm text-muted-foreground mt-1.5">
-                  {formatFechaVentaLocalLegible()}
+                  {formatFechaISOLocalLegible(
+                    user?.rol === 'minorista' ? fechaVistaMinorista : getLocalDateISO()
+                  )}
                 </p>
               )}
             </CardHeader>
@@ -1658,45 +1950,61 @@ export default function NewSale() {
                   </div>
                 ) : (
                   <>
-                    <div className="max-h-[300px] overflow-y-auto overscroll-contain">
-                      <div className="divide-y">
-                        {preregistroItems.map((item) => {
-                          const cantidadVendida = item.cantidad + item.aumento - item.cantidadRestante;
-                          return cantidadVendida > 0 ? (
-                            <div key={item.id} className="px-3 py-2.5 sm:px-4 sm:py-3">
-                              <p className="font-medium text-foreground leading-snug truncate">
-                                {item.nombre}
-                              </p>
-                              <p className="mt-0.5 text-sm tabular-nums text-muted-foreground">
-                                <span>
-                                  {cantidadVendida} × Bs. {item.precio_unitario.toFixed(2)} c/u
-                                </span>
-                                <span className="mx-1.5 opacity-60">·</span>
-                                <span className="font-semibold text-foreground">
-                                  Bs. {item.subtotal.toFixed(2)}
-                                </span>
-                              </p>
-                            </div>
-                          ) : null;
-                        })}
+                    {cargandoVentasResumenDia ? (
+                      <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+                        <Loader className="h-10 w-10 animate-spin text-muted-foreground" />
+                        <p className="mt-4 text-sm text-muted-foreground">Cargando ventas del día…</p>
                       </div>
-                    </div>
-                    {/* Tarjeta / Recarga / Chip */}
-                    <div className="border-t p-3 sm:p-4 space-y-2">
-                      <p className="text-sm font-semibold mb-3">Tarjeta, Recarga y Chip:</p>
-                      {resumenTarjetaRecargaChip.map((row) => (
-                        <div key={row.key} className="flex justify-between items-center text-sm">
-                          <span className="text-muted-foreground">{row.nombre}:</span>
-                          <span className="font-medium">Bs. {row.total.toFixed(2)}</span>
+                    ) : lineasResumenVentasRegistradas.length > 0 ? (
+                      <>
+                        <div className="max-h-[300px] overflow-y-auto overscroll-contain">
+                          <div className="divide-y">
+                            {lineasResumenVentasRegistradas.map((item) => (
+                              <div key={item.key} className="px-3 py-2.5 sm:px-4 sm:py-3">
+                                <p className="font-medium text-foreground leading-snug truncate">
+                                  {item.nombre}
+                                </p>
+                                <p className="mt-0.5 text-sm tabular-nums text-muted-foreground">
+                                  <span>
+                                    {item.cantidadVendida} × Bs. {item.precioUnitario.toFixed(2)} c/u
+                                  </span>
+                                  <span className="mx-1.5 opacity-60">·</span>
+                                  <span className="font-semibold text-foreground">
+                                    Bs. {item.subtotal.toFixed(2)}
+                                  </span>
+                                </p>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      ))}
-                      <div className="flex justify-between items-center pt-2 mt-2 border-t">
-                        <p className="text-sm font-semibold">Total General:</p>
-                        <p className="text-xl font-bold text-primary">
-                          Bs. {preregistroTotal.toFixed(2)}
-                        </p>
+                        {/* Tarjeta / Recarga / Chip */}
+                        <div className="border-t p-3 sm:p-4 space-y-2">
+                          <p className="text-sm font-semibold mb-3">Tarjeta, Recarga y Chip:</p>
+                          {resumenTarjetaRecargaChip.map((row) => (
+                            <div key={row.key} className="flex justify-between items-center text-sm">
+                              <span className="text-muted-foreground">{row.nombre}:</span>
+                              <span className="font-medium">Bs. {row.total.toFixed(2)}</span>
+                            </div>
+                          ))}
+                          <div className="flex justify-between items-center pt-2 mt-2 border-t">
+                            <p className="text-sm font-semibold">Total General:</p>
+                            <p className="text-xl font-bold text-primary">
+                              Bs. {resumenTotalVentasRegistradasDia.toFixed(2)}
+                            </p>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+                        <ClipboardList className="h-12 w-12 text-muted-foreground/50" />
+                        <p className="mt-4 text-muted-foreground">No hay ventas registradas para esta fecha</p>
+                        {user?.rol === 'minorista' && (
+                          <p className="mt-2 text-sm text-muted-foreground">
+                            El resumen solo muestra ventas ya guardadas en esta fecha (al finalizar en Nueva venta).
+                          </p>
+                        )}
                       </div>
-                    </div>
+                    )}
 
                     {!ocultarSelectorMetodoPago && (
                     <>
@@ -1941,7 +2249,7 @@ export default function NewSale() {
 
                     {/* Actions */}
                     <div className="p-3 sm:p-4 space-y-2 border-t">
-                      {user?.rol === 'minorista' && minoristaEdicionBloqueada ? (
+                      {user?.rol === 'minorista' && minoristaEdicionBloqueada && minoristaConsultaEsHoy ? (
                         <>
                           {minoristaMostrarQREnLugarDeFinalizar ? (
                             <Button
@@ -1968,10 +2276,15 @@ export default function NewSale() {
                             </div>
                           )}
                         </>
-                      ) : user?.rol === 'minorista' && minoristaBloqueadoPorJornadaPendiente ? (
+                      ) : user?.rol === 'minorista' && minoristaBloqueadoPorJornadaPendienteVista ? (
                         <p className="text-sm text-center text-muted-foreground px-2 py-2">
                           Iniciá la jornada con <strong>Crear nueva venta</strong> o <strong>Escaneo por QR</strong> en el
-                          panel de preregistros.
+                          panel Ventas del día (Minorista).
+                        </p>
+                      ) : user?.rol === 'minorista' && !minoristaConsultaEsHoy ? (
+                        <p className="text-sm text-center text-muted-foreground px-2 py-2">
+                          Estás viendo el <strong>{formatDateOnlyLocal(fechaVistaMinorista)}</strong>. Volvé a{' '}
+                          <strong>hoy</strong> en el calendario del panel superior para finalizar la venta.
                         </p>
                       ) : (
                         <>
@@ -2417,7 +2730,9 @@ export default function NewSale() {
               </SheetTitle>
               {(user?.rol === 'minorista' || user?.rol === 'mayorista') && (
                 <p className="text-sm text-muted-foreground font-normal mt-1">
-                  {formatFechaVentaLocalLegible()}
+                  {formatFechaISOLocalLegible(
+                    user?.rol === 'minorista' ? fechaVistaMinorista : getLocalDateISO()
+                  )}
                 </p>
               )}
               <SheetDescription className="sr-only">
@@ -2427,7 +2742,12 @@ export default function NewSale() {
               </SheetDescription>
             </SheetHeader>
             <div className="flex min-h-0 flex-1 flex-col">
-              <div className="min-h-0 flex-1 overflow-y-auto">
+              <div
+                className={cn(
+                  'min-h-0 flex-1 overflow-y-auto',
+                  (user?.rol === 'minorista' || user?.rol === 'mayorista') && 'pb-28'
+                )}
+              >
               {/* Mostrar preregistros si es minorista o mayorista */}
               {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
                 preregistroItems.length === 0 ? (
@@ -2438,45 +2758,61 @@ export default function NewSale() {
                   </div>
                 ) : (
                   <>
-                    <div className="overflow-y-auto overscroll-contain">
-                      <div className="divide-y">
-                        {preregistroItems.map((item) => {
-                          const cantidadVendida = item.cantidad + item.aumento - item.cantidadRestante;
-                          return cantidadVendida > 0 ? (
-                            <div key={item.id} className="px-3 py-2.5 sm:px-4 sm:py-3">
-                              <p className="font-medium text-foreground leading-snug truncate">
-                                {item.nombre}
-                              </p>
-                              <p className="mt-0.5 text-sm tabular-nums text-muted-foreground">
-                                <span>
-                                  {cantidadVendida} × Bs. {item.precio_unitario.toFixed(2)} c/u
-                                </span>
-                                <span className="mx-1.5 opacity-60">·</span>
-                                <span className="font-semibold text-foreground">
-                                  Bs. {item.subtotal.toFixed(2)}
-                                </span>
-                              </p>
-                            </div>
-                          ) : null;
-                        })}
+                    {cargandoVentasResumenDia ? (
+                      <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+                        <Loader className="h-10 w-10 animate-spin text-muted-foreground" />
+                        <p className="mt-4 text-sm text-muted-foreground">Cargando ventas del día…</p>
                       </div>
-                    </div>
-                    {/* Tarjeta / Recarga / Chip */}
-                    <div className="border-t p-3 sm:p-4 space-y-2">
-                      <p className="text-sm font-semibold mb-3">Tarjeta, Recarga y Chip:</p>
-                      {resumenTarjetaRecargaChip.map((row) => (
-                        <div key={row.key} className="flex justify-between items-center text-sm">
-                          <span className="text-muted-foreground">{row.nombre}:</span>
-                          <span className="font-medium">Bs. {row.total.toFixed(2)}</span>
+                    ) : lineasResumenVentasRegistradas.length > 0 ? (
+                      <>
+                        <div className="overflow-y-auto overscroll-contain">
+                          <div className="divide-y">
+                            {lineasResumenVentasRegistradas.map((item) => (
+                              <div key={item.key} className="px-3 py-2.5 sm:px-4 sm:py-3">
+                                <p className="font-medium text-foreground leading-snug truncate">
+                                  {item.nombre}
+                                </p>
+                                <p className="mt-0.5 text-sm tabular-nums text-muted-foreground">
+                                  <span>
+                                    {item.cantidadVendida} × Bs. {item.precioUnitario.toFixed(2)} c/u
+                                  </span>
+                                  <span className="mx-1.5 opacity-60">·</span>
+                                  <span className="font-semibold text-foreground">
+                                    Bs. {item.subtotal.toFixed(2)}
+                                  </span>
+                                </p>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      ))}
-                      <div className="flex justify-between items-center pt-2 mt-2 border-t">
-                        <p className="text-sm font-semibold">Total General:</p>
-                        <p className="text-xl font-bold text-primary">
-                          Bs. {preregistroTotal.toFixed(2)}
-                        </p>
+                        {/* Tarjeta / Recarga / Chip */}
+                        <div className="border-t p-3 sm:p-4 space-y-2">
+                          <p className="text-sm font-semibold mb-3">Tarjeta, Recarga y Chip:</p>
+                          {resumenTarjetaRecargaChip.map((row) => (
+                            <div key={row.key} className="flex justify-between items-center text-sm">
+                              <span className="text-muted-foreground">{row.nombre}:</span>
+                              <span className="font-medium">Bs. {row.total.toFixed(2)}</span>
+                            </div>
+                          ))}
+                          <div className="flex justify-between items-center pt-2 mt-2 border-t">
+                            <p className="text-sm font-semibold">Total General:</p>
+                            <p className="text-xl font-bold text-primary">
+                              Bs. {resumenTotalVentasRegistradasDia.toFixed(2)}
+                            </p>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+                        <ClipboardList className="h-16 w-16 text-muted-foreground/50" />
+                        <p className="mt-4 text-muted-foreground">No hay ventas registradas para esta fecha</p>
+                        {user?.rol === 'minorista' && (
+                          <p className="mt-2 text-sm text-muted-foreground">
+                            El resumen solo muestra ventas ya guardadas en esta fecha (al finalizar en Nueva venta).
+                          </p>
+                        )}
                       </div>
-                    </div>
+                    )}
                   </>
                 )
               ) : items.length === 0 ? (
@@ -2794,7 +3130,14 @@ export default function NewSale() {
                   )}
 
                   {/* Total */}
-                  {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
+                  {(user?.rol === 'minorista' || user?.rol === 'mayorista') &&
+                  cargandoVentasResumenDia ? (
+                    <div className="border-t bg-muted/30 p-4 flex flex-col items-center gap-2 py-6">
+                      <Loader className="h-8 w-8 animate-spin text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">Cargando ventas…</span>
+                    </div>
+                  ) : (user?.rol === 'minorista' || user?.rol === 'mayorista') &&
+                  lineasResumenVentasRegistradas.length > 0 ? (
                     <>
                       <div className="border-t p-4 space-y-2">
                         <p className="text-sm font-semibold mb-3">Tarjeta, Recarga y Chip:</p>
@@ -2808,16 +3151,20 @@ export default function NewSale() {
                       <div className="border-t bg-muted/30 p-4">
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-muted-foreground">Subtotal</span>
-                          <span className="text-base font-medium">Bs. {preregistroTotal.toFixed(2)}</span>
+                          <span className="text-base font-medium">Bs. {resumenTotalVentasRegistradasDia.toFixed(2)}</span>
                         </div>
                         <div className="mt-2 flex items-center justify-between">
                           <span className="font-display text-lg font-bold">Total</span>
                           <span className="font-display text-2xl font-bold text-primary">
-                            Bs. {preregistroTotal.toFixed(2)}
+                            Bs. {resumenTotalVentasRegistradasDia.toFixed(2)}
                           </span>
                         </div>
                       </div>
                     </>
+                  ) : (user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
+                    <div className="border-t bg-muted/30 p-4 text-center text-sm text-muted-foreground">
+                      No hay ventas registradas para esta fecha
+                    </div>
                   ) : (
                     <div className="border-t bg-muted/30 p-4">
                       <div className="flex items-center justify-between">
@@ -2872,7 +3219,7 @@ export default function NewSale() {
               {(user?.rol === 'minorista' || user?.rol === 'mayorista') &&
                 preregistroItems.length > 0 && (
                   <div className="shrink-0 space-y-2 border-t bg-background p-4">
-                    {user?.rol === 'minorista' && minoristaEdicionBloqueada ? (
+                    {user?.rol === 'minorista' && minoristaEdicionBloqueada && minoristaConsultaEsHoy ? (
                       <>
                         {minoristaMostrarQREnLugarDeFinalizar ? (
                           <Button
@@ -2907,10 +3254,25 @@ export default function NewSale() {
                           Cerrar
                         </Button>
                       </>
-                    ) : user?.rol === 'minorista' && minoristaBloqueadoPorJornadaPendiente ? (
+                    ) : user?.rol === 'minorista' && minoristaBloqueadoPorJornadaPendienteVista ? (
                       <>
                         <p className="text-sm text-center text-muted-foreground px-2">
-                          Usá los botones en el panel <strong>Preregistros Minorista</strong> (arriba): nueva venta o QR.
+                          Usá los botones en <strong>Ventas del día (Minorista)</strong> (arriba): nueva venta o QR.
+                        </p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => setShowCartSheet(false)}
+                        >
+                          Cerrar
+                        </Button>
+                      </>
+                    ) : user?.rol === 'minorista' && !minoristaConsultaEsHoy ? (
+                      <>
+                        <p className="text-sm text-center text-muted-foreground px-2">
+                          Consulta del <strong>{formatDateOnlyLocal(fechaVistaMinorista)}</strong>. Para vender, elegí{' '}
+                          <strong>hoy</strong> en el calendario del panel superior.
                         </p>
                         <Button
                           type="button"

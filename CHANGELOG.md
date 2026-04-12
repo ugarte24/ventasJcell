@@ -5,6 +5,7 @@ Todos los cambios notables en este proyecto serán documentados en este archivo.
 ## [Unreleased]
 
 ### Mejoras
+- **Nueva venta (minorista)**: El panel principal pasa a llamarse **Ventas del día (Minorista)** con la fecha de hoy y **Consulta (Minorista)** en fechas pasadas; calendario para elegir día; en consulta solo se muestra tabla si hubo ventas guardadas ese día; tabla de consulta en solo lectura alineada a `ventas_minoristas`; resumen lateral/hoja móvil con líneas y totales desde BD (sin mezclar saldos de otros días); botón Pedidos solo en vista “hoy”; orden de filas invertido en listados de ventas del resumen; mensajes en Pedidos actualizados al nuevo nombre
 - **Saldo restante en base de datos**: El saldo editado en Nueva Venta se guarda en `cantidad_restante` de `preregistros_minorista` / `preregistros_mayorista` (minorista vía RPC `set_preregistro_cantidad_restante_minorista`). Tras ejecutar la migración SQL, el saldo persiste entre dispositivos y sesiones; `localStorage` queda solo como respaldo si el valor en BD es NULL
 - **Preregistros mayorista reutilizables**: Los preregistros de mayoristas ahora funcionan igual que los de minoristas: son reutilizables todos los días, sin filtrar por fecha. Se eliminó la columna `fecha` de la tabla `preregistros_mayorista` y se unificó el constraint a `(id_mayorista, id_producto)`
 - **Ordenamiento de productos en preregistros**: Los productos ahora se muestran en el orden en que fueron registrados (primero registrado, primero en la lista) tanto para mayoristas como para minoristas

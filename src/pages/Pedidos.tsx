@@ -505,8 +505,8 @@ export default function Pedidos() {
             <AlertDescription>
               {pedidosGate?.motivo === 'jornada' ? (
                 <>
-                  Cerraste la jornada en un día anterior. En <strong>Nueva venta</strong>, en el panel{' '}
-                  <strong>Preregistros Minorista</strong>, usá <strong>Crear nueva venta</strong> o{' '}
+                  Cerraste la jornada en un día anterior. En <strong>Nueva venta</strong>, en{' '}
+                  <strong>Ventas del día (Minorista)</strong>, usá <strong>Crear nueva venta</strong> o{' '}
                   <strong>Escaneo por QR</strong> para iniciar el día; después podrás registrar pedidos.
                 </>
               ) : (

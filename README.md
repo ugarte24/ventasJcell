@@ -14,6 +14,7 @@ Sistema de gestión de ventas e inventario diseñado para reemplazar el registro
 - **Reportes Profesionales**: Análisis de ventas y productos más vendidos con exportación a PDF/Excel con diseño profesional
 - **Impresión de Tickets**: Sistema completo de impresión de tickets y comprobantes de pago
 - **Paginación**: Navegación eficiente en todas las tablas del sistema
+- **Minorista en Nueva venta**: Panel titulado **Ventas del día (Minorista)** cuando el calendario está en la fecha de hoy, y **Consulta (Minorista)** en días anteriores. En consulta histórica solo se muestra detalle si hubo ventas finalizadas ese día (datos desde `ventas_minoristas`). Crear nueva venta, escanear QR y editar saldos solo están habilitados en la fecha actual. El resumen (escritorio y móvil) lista importes según ventas registradas en BD para la fecha elegida.
 
 ## 🛠️ Stack Tecnológico
 
@@ -174,7 +175,7 @@ ventacontrol-pro/
 
 - `/login` - Página de autenticación
 - `/dashboard` - Panel principal con estadísticas en tiempo real
-- `/ventas/nueva` - Registro de nueva venta (POS)
+- `/ventas/nueva` - Registro de nueva venta (POS); minoristas y mayoristas operan sobre su preregistro asignado
 - `/ventas` - Historial de ventas con filtros
 - `/creditos` - Gestión de ventas a crédito y pagos
 - `/servicios` - Gestión de servicios (CRUD completo, solo admin)
@@ -184,7 +185,7 @@ ventacontrol-pro/
 - `/categorias` - Gestión de categorías (CRUD completo, solo admin)
 - `/reportes` - Reportes y análisis con gráficos
 - `/usuarios` - Gestión de usuarios (solo admin)
-- `/arqueos/minorista` - Arqueos diarios de minoristas
+- `/arqueos/minorista` - **Ventas del día** (minorista): consulta por fecha con calendario de movimientos registrados
 - `/arqueos/mayorista` - Arqueos flexibles de mayoristas
 - `/preregistros/minorista` - Preregistros de minoristas
 - `/preregistros/mayorista` - Preregistros de mayoristas
