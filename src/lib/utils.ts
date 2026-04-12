@@ -197,3 +197,23 @@ export async function compressImage(
     reader.readAsDataURL(file);
   });
 }
+
+/** Códigos de producto que son solo dígitos (p. ej. 189 → siguiente 190). */
+const CODIGO_PRODUCTO_SOLO_DIGITOS = /^\d+$/;
+
+/**
+ * Siguiente código secuencial entre productos cuyo `codigo` es numérico puro.
+ * Ignora códigos alfanuméricos (p. ej. BEB001). Si no hay ninguno, devuelve "1".
+ */
+export function getNextSequentialNumericProductCode(
+  items: { codigo: string }[]
+): string {
+  let max = 0;
+  for (const p of items) {
+    const c = (p.codigo ?? '').trim();
+    if (!CODIGO_PRODUCTO_SOLO_DIGITOS.test(c)) continue;
+    const n = parseInt(c, 10);
+    if (!Number.isNaN(n) && n > max) max = n;
+  }
+  return String(max + 1);
+}

@@ -98,6 +98,8 @@ export interface PreregistroMinorista {
   id_minorista?: string;
   id_producto: string;
   cantidad: number;
+  /** Orden en listados (menor = primero). Requiere columna `orden` en BD. */
+  orden?: number | null;
   /** Saldo restante persistido (Nueva Venta). null/undefined = calcular desde cantidad + aumentos */
   cantidad_restante?: number | null;
   fecha?: string;
@@ -113,6 +115,8 @@ export interface PreregistroMayorista {
   id_mayorista: string;
   id_producto: string;
   cantidad: number;
+  /** Orden en listados (menor = primero). Requiere columna `orden` en BD. */
+  orden?: number | null;
   /** Saldo restante persistido (Nueva Venta). null/undefined = calcular desde cantidad + aumentos */
   cantidad_restante?: number | null;
   fecha?: string; // Opcional: preregistros reutilizables sin fecha (igual que minorista)

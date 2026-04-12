@@ -37,7 +37,9 @@ export const preregistrosService = {
       query = query.eq('id_minorista', idMinorista);
     }
 
-    const { data, error } = await query.order('created_at', { ascending: true });
+    const { data, error } = await query
+      .order('orden', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: true });
 
     if (error) throw new Error(handleSupabaseError(error));
 
@@ -47,6 +49,42 @@ export const preregistrosService = {
       producto: preregistro.producto || undefined,
       minorista: preregistro.minorista || undefined,
     })) as PreregistroMinorista[];
+  },
+
+  async normalizeOrdenMinorista(idMinorista: string): Promise<void> {
+    const { data, error } = await supabase
+      .from('preregistros_minorista')
+      .select('id')
+      .eq('id_minorista', idMinorista)
+      .order('created_at', { ascending: true });
+    if (error) throw new Error(handleSupabaseError(error));
+    const updatedAt = getLocalDateTimeISO();
+    await Promise.all(
+      (data || []).map((row, i) =>
+        supabase
+          .from('preregistros_minorista')
+          .update({ orden: i + 1, updated_at: updatedAt })
+          .eq('id', row.id)
+      )
+    );
+  },
+
+  async normalizeOrdenMayorista(idMayorista: string): Promise<void> {
+    const { data, error } = await supabase
+      .from('preregistros_mayorista')
+      .select('id')
+      .eq('id_mayorista', idMayorista)
+      .order('created_at', { ascending: true });
+    if (error) throw new Error(handleSupabaseError(error));
+    const updatedAt = getLocalDateTimeISO();
+    await Promise.all(
+      (data || []).map((row, i) =>
+        supabase
+          .from('preregistros_mayorista')
+          .update({ orden: i + 1, updated_at: updatedAt })
+          .eq('id', row.id)
+      )
+    );
   },
 
   async createPreregistroMinorista(
@@ -112,6 +150,15 @@ export const preregistrosService = {
       } as PreregistroMinorista;
     }
 
+    const { data: ordenRows } = await supabase
+      .from('preregistros_minorista')
+      .select('orden')
+      .eq('id_minorista', idMinorista);
+    const nextOrden =
+      ordenRows && ordenRows.length > 0
+        ? Math.max(0, ...ordenRows.map((r: { orden: number | null }) => (r.orden != null ? r.orden : 0))) + 1
+        : 1;
+
     // Crear nuevo preregistro
     const { data, error } = await supabase
       .from('preregistros_minorista')
@@ -119,6 +166,7 @@ export const preregistrosService = {
         id_minorista: idMinorista,
         id_producto: idProducto,
         cantidad,
+        orden: nextOrden,
         created_at: createdAt,
         updated_at: updatedAt,
       })
@@ -188,6 +236,7 @@ export const preregistrosService = {
       id_producto?: string;
       cantidad?: number;
       cantidad_restante?: number | null;
+      orden?: number;
     }
   ): Promise<PreregistroMinorista> {
     const updatedAt = getLocalDateTimeISO();
@@ -280,7 +329,9 @@ export const preregistrosService = {
       query = query.eq('id_mayorista', idMayorista);
     }
 
-    const { data, error } = await query.order('created_at', { ascending: true });
+    const { data, error } = await query
+      .order('orden', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: true });
 
     if (error) throw new Error(handleSupabaseError(error));
 
@@ -355,6 +406,15 @@ export const preregistrosService = {
       } as PreregistroMayorista;
     }
 
+    const { data: ordenRowsM } = await supabase
+      .from('preregistros_mayorista')
+      .select('orden')
+      .eq('id_mayorista', idMayorista);
+    const nextOrdenMayor =
+      ordenRowsM && ordenRowsM.length > 0
+        ? Math.max(0, ...ordenRowsM.map((r: { orden: number | null }) => (r.orden != null ? r.orden : 0))) + 1
+        : 1;
+
     // Crear nuevo preregistro (sin fecha, reutilizable como minorista)
     const { data, error } = await supabase
       .from('preregistros_mayorista')
@@ -362,6 +422,7 @@ export const preregistrosService = {
         id_mayorista: idMayorista,
         id_producto: idProducto,
         cantidad,
+        orden: nextOrdenMayor,
         created_at: createdAt,
         updated_at: updatedAt,
       })
@@ -400,6 +461,7 @@ export const preregistrosService = {
       id_producto?: string;
       cantidad?: number;
       cantidad_restante?: number | null;
+      orden?: number;
     }
   ): Promise<PreregistroMayorista> {
     const updatedAt = getLocalDateTimeISO();

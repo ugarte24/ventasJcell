@@ -174,8 +174,17 @@ const Sidebar = React.forwardRef<
           }
           side={side}
           onOpenAutoFocus={(e) => {
-            // Prevenir auto-focus cuando se abre el menú en móvil
-            e.preventDefault();
+            // Mover el foco al panel: si queda en SidebarTrigger, Radix aplica aria-hidden al resto
+            // y el navegador advierte "Blocked aria-hidden… descendant retained focus".
+            const panel = e.currentTarget;
+            const first =
+              panel.querySelector<HTMLElement>(
+                '[data-sidebar="menu-button"]:not([disabled]), a[href]:not([aria-hidden="true"])'
+              ) ?? panel.querySelector<HTMLElement>('a[href], button:not([disabled])');
+            if (first) {
+              e.preventDefault();
+              first.focus();
+            }
           }}
         >
           <SheetTitle className="sr-only">Menú de navegación</SheetTitle>

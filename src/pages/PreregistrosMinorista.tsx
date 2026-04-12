@@ -40,7 +40,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Plus, Trash2, Loader, Check, ChevronsUpDown, Edit, Package } from 'lucide-react';
+import { Plus, Trash2, Loader, Check, ChevronsUpDown, Edit, Package, ArrowUp, ArrowDown } from 'lucide-react';
 import { useProducts } from '@/hooks/useProducts';
 import { useUsers } from '@/hooks/useUsers';
 import { preregistrosService } from '@/services/preregistros.service';
@@ -73,6 +73,7 @@ export default function PreregistrosMinorista() {
   const [newCantidadForManage, setNewCantidadForManage] = useState<string>('1');
   const [newProductSearchOpen, setNewProductSearchOpen] = useState(false);
   const [newProductSearchTerm, setNewProductSearchTerm] = useState('');
+  const [isReordering, setIsReordering] = useState(false);
 
   const minoristas = users.filter(u => u.rol === 'minorista' && u.estado === 'activo');
   const filteredMinoristas = minoristas.filter(m =>
@@ -248,6 +249,51 @@ export default function PreregistrosMinorista() {
     setEditCantidad(preregistro.cantidad.toString());
     setEditProductSearchTerm('');
     setIsEditDialogOpen(true);
+  };
+
+  const handleMoveMinoristaPreregistro = async (index: number, direction: 'up' | 'down') => {
+    if (!selectedMinoristaForManage) return;
+    const delta = direction === 'up' ? -1 : 1;
+    const j = index + delta;
+    if (j < 0 || j >= preregistrosDelMinorista.length) return;
+    setIsReordering(true);
+    try {
+      let items = [...preregistrosDelMinorista];
+      if (items.some((p) => p.orden == null)) {
+        await preregistrosService.normalizeOrdenMinorista(selectedMinoristaForManage);
+        items = await preregistrosService.getPreregistrosMinorista(selectedMinoristaForManage);
+        setPreregistrosDelMinorista(items);
+      }
+      let a = items[index];
+      let b = items[j];
+      let oa = a.orden;
+      let ob = b.orden;
+      if (oa == null || ob == null) {
+        await preregistrosService.normalizeOrdenMinorista(selectedMinoristaForManage);
+        items = await preregistrosService.getPreregistrosMinorista(selectedMinoristaForManage);
+        setPreregistrosDelMinorista(items);
+        const a2 = items.find((p) => p.id === a.id);
+        const b2 = items.find((p) => p.id === b.id);
+        if (!a2 || !b2 || a2.orden == null || b2.orden == null) {
+          toast.error(
+            'No se pudo reordenar. Ejecutá en Supabase el script migrations/add_orden_preregistros_minorista_mayorista.sql'
+          );
+          return;
+        }
+        a = a2;
+        b = b2;
+        oa = a2.orden;
+        ob = b2.orden;
+      }
+      await preregistrosService.updatePreregistroMinorista(a.id, { orden: ob });
+      await preregistrosService.updatePreregistroMinorista(b.id, { orden: oa });
+      await loadPreregistrosDelMinorista(selectedMinoristaForManage);
+      loadPreregistros();
+    } catch (error: any) {
+      toast.error(error.message || 'Error al reordenar');
+    } finally {
+      setIsReordering(false);
+    }
   };
 
   // Eliminar producto desde el diálogo de gestión
@@ -504,7 +550,7 @@ export default function PreregistrosMinorista() {
                 Gestionar Productos - {minoristasUnicos.find(m => m.id === selectedMinoristaForManage)?.nombre || 'N/A'}
               </DialogTitle>
               <DialogDescription>
-                Agrega, edita o elimina productos de este minorista.
+                Agrega, edita o elimina productos de este minorista. Usá las flechas para subir o bajar filas; el mismo orden se usa en Nueva venta.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
@@ -604,7 +650,7 @@ export default function PreregistrosMinorista() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      preregistrosDelMinorista.map((preregistro) => (
+                      preregistrosDelMinorista.map((preregistro, rowIndex) => (
                         <TableRow key={preregistro.id}>
                           <TableCell>
                             {preregistro.producto?.nombre || 'N/A'}
@@ -616,7 +662,31 @@ export default function PreregistrosMinorista() {
                             {preregistro.cantidad}
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-2">
+                            <div className="flex items-center justify-end gap-1 flex-wrap sm:flex-nowrap">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                aria-label="Subir una fila"
+                                disabled={isReordering || rowIndex === 0}
+                                onClick={() => void handleMoveMinoristaPreregistro(rowIndex, 'up')}
+                              >
+                                <ArrowUp className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                aria-label="Bajar una fila"
+                                disabled={
+                                  isReordering || rowIndex >= preregistrosDelMinorista.length - 1
+                                }
+                                onClick={() => void handleMoveMinoristaPreregistro(rowIndex, 'down')}
+                              >
+                                <ArrowDown className="h-4 w-4" />
+                              </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"

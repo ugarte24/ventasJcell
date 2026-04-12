@@ -164,32 +164,48 @@ export const productsService = {
 
     // Crear movimiento de inventario si hay diferencia
     if (diferencia !== 0) {
-      // Usar fecha del cliente (navegador) en hora local
       const ahora = new Date();
       const año = ahora.getFullYear();
       const mes = String(ahora.getMonth() + 1).padStart(2, '0');
       const dia = String(ahora.getDate()).padStart(2, '0');
-      const fecha = `${año}-${mes}-${dia}`; // YYYY-MM-DD en hora local
-
-      // Obtener timestamp de creación en hora local
+      const fecha = `${año}-${mes}-${dia}`;
       const createdAt = getLocalDateTimeISO();
-      
-      const { error: movementError } = await supabase
-        .from('movimientos_inventario')
-        .insert({
+      const tipoEntradaSalida = diferencia > 0 ? ('entrada' as const) : ('salida' as const);
+      const cantidadAbs = Math.abs(diferencia);
+      const observacion = `Ajuste de stock: ${stockAnterior} → ${nuevoStock}`;
+
+      // Esquema actual (tipo_movimiento, motivo, observacion, fecha)
+      let { error: movementError } = await supabase.from('movimientos_inventario').insert({
+        id_producto: id,
+        tipo_movimiento: tipoEntradaSalida,
+        cantidad: cantidadAbs,
+        motivo: 'ajuste',
+        fecha,
+        id_usuario: idUsuario ?? null,
+        observacion,
+        created_at: createdAt,
+      });
+
+      // Bases aún con esquema antiguo (tipo, cantidad_anterior, cantidad_nueva, id_usuario NOT NULL)
+      if (movementError && idUsuario) {
+        const { error: legacyError } = await supabase.from('movimientos_inventario').insert({
           id_producto: id,
-          tipo_movimiento: diferencia > 0 ? 'entrada' : 'salida',
-          cantidad: Math.abs(diferencia),
-          motivo: 'ajuste',
-          fecha: fecha,
-          id_usuario: idUsuario || null,
-          observacion: `Ajuste de stock: ${stockAnterior} → ${nuevoStock}`,
-          created_at: createdAt, // Timestamp explícito en hora local
+          tipo: tipoEntradaSalida,
+          cantidad: cantidadAbs,
+          cantidad_anterior: stockAnterior,
+          cantidad_nueva: nuevoStock,
+          motivo: observacion,
+          id_usuario: idUsuario,
         });
+        movementError = legacyError ?? null;
+      }
 
       if (movementError) {
-        console.error('Error al crear movimiento de inventario:', movementError);
-        // No revertimos el cambio de stock, solo registramos el error
+        console.error(
+          'Error al crear movimiento de inventario:',
+          movementError,
+          handleSupabaseError(movementError)
+        );
       }
     }
 

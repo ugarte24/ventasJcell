@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -101,7 +101,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { storageService } from '@/services/storage.service';
-import { cn, compressImage } from '@/lib/utils';
+import { cn, compressImage, getNextSequentialNumericProductCode } from '@/lib/utils';
 
 // Esquemas de validación
 const createProductSchema = z.object({
@@ -119,7 +119,7 @@ const createProductSchema = z.object({
 const updateProductSchema = z.object({
   nombre: z.string().min(2, 'El nombre debe tener al menos 2 caracteres').optional(),
   descripcion: z.string().optional(),
-  precio_venta: z.number().min(0.01, 'El precio debe ser mayor a 0').optional(),
+  precio_por_unidad: z.number().min(0.01, 'El precio debe ser mayor a 0'),
   precio_por_mayor: z.number().min(0, 'El precio por mayor debe ser mayor o igual a 0').optional(),
   codigo: z.string().min(1, 'El código es requerido').optional(),
   id_categoria: z.string().optional(),
@@ -157,6 +157,8 @@ export default function Products() {
   const [editCategoryOpen, setEditCategoryOpen] = useState(false);
   const [categorySearchTerm, setCategorySearchTerm] = useState('');
   const [editCategorySearchTerm, setEditCategorySearchTerm] = useState('');
+
+  const createDialogAssignCodigoRef = useRef(false);
 
   // Filtrar categorías por término de búsqueda
   const filteredCategories = useMemo(() => {
@@ -232,6 +234,18 @@ export default function Products() {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
+
+  // Al abrir "Crear producto", asignar el siguiente código numérico secuencial (una vez por apertura)
+  useEffect(() => {
+    if (!isCreateDialogOpen) {
+      createDialogAssignCodigoRef.current = false;
+      return;
+    }
+    if (isLoading) return;
+    if (createDialogAssignCodigoRef.current) return;
+    createForm.setValue('codigo', getNextSequentialNumericProductCode(products));
+    createDialogAssignCodigoRef.current = true;
+  }, [isCreateDialogOpen, isLoading, products, createForm]);
 
   const stats = {
     total: products.length,
@@ -596,11 +610,15 @@ export default function Products() {
 
   const handleAdjustStock = async (data: AdjustStockForm) => {
     if (!selectedProduct) return;
+    if (!user?.id) {
+      toast.error('No hay usuario en sesión; no se puede registrar el movimiento de inventario.');
+      return;
+    }
     try {
       await adjustStockMutation.mutateAsync({
         id: selectedProduct.id,
         nuevoStock: data.nuevoStock,
-        idUsuario: user?.id,
+        idUsuario: user.id,
       });
       toast.success('Stock actualizado exitosamente');
       setIsStockDialogOpen(false);
@@ -964,8 +982,12 @@ export default function Products() {
                     <Input
                       id="codigo"
                       {...createForm.register('codigo')}
-                      placeholder="Ej: BEB001"
+                      placeholder="Siguiente número"
+                      autoComplete="off"
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Se completa solo con el siguiente número (189 → 190). Podés cambiarlo si hace falta.
+                    </p>
                     {createForm.formState.errors.codigo && (
                       <p className="text-sm text-destructive">
                         {createForm.formState.errors.codigo.message}

@@ -33,7 +33,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Plus, Trash2, Loader, Check, ChevronsUpDown, Edit, Package } from 'lucide-react';
+import { Plus, Trash2, Loader, Check, ChevronsUpDown, Edit, Package, ArrowUp, ArrowDown } from 'lucide-react';
 import { useProducts } from '@/hooks/useProducts';
 import { useUsers } from '@/hooks/useUsers';
 import { preregistrosService } from '@/services/preregistros.service';
@@ -65,6 +65,7 @@ export default function PreregistrosMayorista() {
   const [newCantidadForManage, setNewCantidadForManage] = useState<string>('1');
   const [newProductSearchOpen, setNewProductSearchOpen] = useState(false);
   const [newProductSearchTerm, setNewProductSearchTerm] = useState('');
+  const [isReordering, setIsReordering] = useState(false);
 
   const mayoristas = users.filter(u => u.rol === 'mayorista' && u.estado === 'activo');
   const filteredMayoristas = mayoristas.filter(m =>
@@ -242,6 +243,51 @@ export default function PreregistrosMayorista() {
       }
     } catch (error: any) {
       toast.error(error.message || 'Error al actualizar preregistro');
+    }
+  };
+
+  const handleMoveMayoristaPreregistro = async (index: number, direction: 'up' | 'down') => {
+    if (!selectedMayoristaForManage) return;
+    const delta = direction === 'up' ? -1 : 1;
+    const j = index + delta;
+    if (j < 0 || j >= preregistrosDelMayorista.length) return;
+    setIsReordering(true);
+    try {
+      let items = [...preregistrosDelMayorista];
+      if (items.some((p) => p.orden == null)) {
+        await preregistrosService.normalizeOrdenMayorista(selectedMayoristaForManage);
+        items = await preregistrosService.getPreregistrosMayorista(selectedMayoristaForManage);
+        setPreregistrosDelMayorista(items);
+      }
+      let a = items[index];
+      let b = items[j];
+      let oa = a.orden;
+      let ob = b.orden;
+      if (oa == null || ob == null) {
+        await preregistrosService.normalizeOrdenMayorista(selectedMayoristaForManage);
+        items = await preregistrosService.getPreregistrosMayorista(selectedMayoristaForManage);
+        setPreregistrosDelMayorista(items);
+        const a2 = items.find((p) => p.id === a.id);
+        const b2 = items.find((p) => p.id === b.id);
+        if (!a2 || !b2 || a2.orden == null || b2.orden == null) {
+          toast.error(
+            'No se pudo reordenar. Ejecutá en Supabase el script migrations/add_orden_preregistros_minorista_mayorista.sql'
+          );
+          return;
+        }
+        a = a2;
+        b = b2;
+        oa = a2.orden;
+        ob = b2.orden;
+      }
+      await preregistrosService.updatePreregistroMayorista(a.id, { orden: ob });
+      await preregistrosService.updatePreregistroMayorista(b.id, { orden: oa });
+      await loadPreregistrosDelMayorista(selectedMayoristaForManage);
+      loadPreregistros();
+    } catch (error: any) {
+      toast.error(error.message || 'Error al reordenar');
+    } finally {
+      setIsReordering(false);
     }
   };
 
@@ -503,7 +549,8 @@ export default function PreregistrosMayorista() {
               </DialogTitle>
               <DialogDescription>
                 Agrega, edita o elimina productos de este mayorista
-                {fechaGestionLabel ? ` para la fecha ${fechaGestionLabel}` : ''}.
+                {fechaGestionLabel ? ` para la fecha ${fechaGestionLabel}` : ''}. Usá las flechas para subir o bajar
+                filas; el mismo orden se usa en Nueva venta.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
@@ -603,7 +650,7 @@ export default function PreregistrosMayorista() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      preregistrosDelMayorista.map((preregistro) => (
+                      preregistrosDelMayorista.map((preregistro, rowIndex) => (
                         <TableRow key={preregistro.id}>
                           <TableCell>
                             {preregistro.producto?.nombre || 'N/A'}
@@ -615,7 +662,31 @@ export default function PreregistrosMayorista() {
                             {preregistro.cantidad}
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-2">
+                            <div className="flex items-center justify-end gap-1 flex-wrap sm:flex-nowrap">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                aria-label="Subir una fila"
+                                disabled={isReordering || rowIndex === 0}
+                                onClick={() => void handleMoveMayoristaPreregistro(rowIndex, 'up')}
+                              >
+                                <ArrowUp className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                aria-label="Bajar una fila"
+                                disabled={
+                                  isReordering || rowIndex >= preregistrosDelMayorista.length - 1
+                                }
+                                onClick={() => void handleMoveMayoristaPreregistro(rowIndex, 'down')}
+                              >
+                                <ArrowDown className="h-4 w-4" />
+                              </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"
