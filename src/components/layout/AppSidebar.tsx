@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Home, ShoppingCart, Package, BarChart3, Users, Settings, LogOut, Receipt, FolderTree, UserCircle, Wallet, ArrowLeftRight, DollarSign, Wrench, Calendar, History, Search, ChevronDown, ChevronRight, ClipboardList, Store, QrCode, LayoutDashboard, User } from 'lucide-react';
+import { Home, ShoppingCart, Package, BarChart3, Users, Settings, LogOut, Receipt, FolderTree, UserCircle, Wallet, ArrowLeftRight, DollarSign, Wrench, Calendar, History, Search, ChevronDown, ChevronRight, ClipboardList, Store, LayoutDashboard, User } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/contexts';
 import {
@@ -44,7 +44,6 @@ const menuSections = [
       { title: 'Nueva Venta', url: '/ventas/nueva', icon: ShoppingCart, roles: ['admin', 'vendedor', 'minorista', 'mayorista'] },
       { title: 'Historial de Ventas', url: '/ventas', icon: Receipt, roles: ['admin', 'vendedor', 'minorista', 'mayorista'] },
       { title: 'Ventas a Crédito', url: '/creditos', icon: DollarSign, roles: ['admin', 'vendedor'] },
-      { title: 'Escanear QR', url: '/escanear-qr', icon: QrCode, roles: ['minorista'] },
       { title: 'Mis Pedidos', url: '/pedidos', icon: Package, roles: ['minorista', 'mayorista'] },
       { title: 'Ventas del día', url: '/arqueos/minorista', icon: Wallet, roles: ['minorista'] },
       { title: 'Mis Arqueos', url: '/arqueos/mayorista', icon: Wallet, roles: ['mayorista'] },

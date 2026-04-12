@@ -4,6 +4,18 @@ Todos los cambios notables en este proyecto serán documentados en este archivo.
 
 ## [Unreleased]
 
+## [2.25.0] - 2026-04-12
+
+### Mejoras
+- **Panel de control**: mensaje de estado del día para minorista (jornada / venta registrada) y mayorista; botón **Actualizar** para refrescar datos; subtítulos en tarjetas (POS hoy, desglose de pedidos); **Nueva venta** más destacada para minorista; accesos a **Ventas del día** y **Mis arqueos**; vendedor: Historial, Servicios y Registro de servicios; admin: enlace **Ver inventario** desde alertas de stock; título y descripción aclaratoria en “Últimas ventas registradas”
+- **Menú lateral**: eliminado el ítem **Escanear QR** para minorista (el flujo sigue en Nueva venta → Escaneo por QR)
+
+### Cambios técnicos
+- `Dashboard.tsx`: queries alineadas con Nueva venta para estado minorista; eliminado código muerto de notificaciones del navegador
+- `NewSale.tsx`: invalidación de `minorista-hay-venta-nueva-venta-hoy` y `mayorista-hay-venta-nueva-venta-hoy` al iniciar jornada o registrar venta
+
+## [2.24.0]
+
 ### Mejoras
 - **Nueva venta (minorista)**: El panel principal pasa a llamarse **Ventas del día (Minorista)** con la fecha de hoy y **Consulta (Minorista)** en fechas pasadas; calendario para elegir día; en consulta solo se muestra tabla si hubo ventas guardadas ese día; tabla de consulta en solo lectura alineada a `ventas_minoristas`; resumen lateral/hoja móvil con líneas y totales desde BD (sin mezclar saldos de otros días); botón Pedidos solo en vista “hoy”; orden de filas invertido en listados de ventas del resumen; mensajes en Pedidos actualizados al nuevo nombre
 - **Saldo restante en base de datos**: El saldo editado en Nueva Venta se guarda en `cantidad_restante` de `preregistros_minorista` / `preregistros_mayorista` (minorista vía RPC `set_preregistro_cantidad_restante_minorista`). Tras ejecutar la migración SQL, el saldo persiste entre dispositivos y sesiones; `localStorage` queda solo como respaldo si el valor en BD es NULL

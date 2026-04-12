@@ -1,8 +1,8 @@
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { StatCard } from '@/components/ui/stat-card';
 import { useAuth } from '@/contexts';
-import { DollarSign, ShoppingBag, TrendingUp, Package, Clock, AlertTriangle, Bell, BellOff, Wrench, Send, CheckCircle, ClipboardList, XCircle, Receipt } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DollarSign, ShoppingBag, TrendingUp, Package, Clock, AlertTriangle, Wrench, ClipboardList, Receipt, Wallet, RefreshCw } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
@@ -10,20 +10,20 @@ import { useTodaySales, useSales } from '@/hooks/useSales';
 import { useLowStockProducts } from '@/hooks/useProducts';
 import { useServicios } from '@/hooks/useServicios';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useNotifications } from '@/hooks/useNotifications';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { toast } from 'sonner';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { pedidosService } from '@/services/pedidos.service';
 import { preregistrosService } from '@/services/preregistros.service';
+import { ventasMinoristasService } from '@/services/ventas-minoristas.service';
+import { ventasMayoristasService } from '@/services/ventas-mayoristas.service';
 import { getLocalDateISO, cn } from '@/lib/utils';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { NotificacionesArqueo } from '@/components/NotificacionesArqueo';
 
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const isMinoristaMayorista = user?.rol === 'minorista' || user?.rol === 'mayorista';
   
   // Queries para admin/vendedor
@@ -73,46 +73,130 @@ export default function Dashboard() {
       : undefined
   );
 
-  const { requestPermission, hasPermission, isSupported, isEnabled, enable, disable } = useNotifications();
-  const [notificationEnabled, setNotificationEnabled] = useState(false);
+  const { data: minoristaUltimaFechaFinalizadaVenta = null } = useQuery({
+    queryKey: ['minorista-ultima-finalizada-preregistro', user?.id],
+    queryFn: async () => {
+      if (!user || user.rol !== 'minorista') return null;
+      return ventasMinoristasService.getUltimaFechaVentaDesdeNuevaVenta(user.id);
+    },
+    enabled: !!user && user.rol === 'minorista',
+  });
 
-  // Verificar estado de notificaciones
+  const { data: minoristaHayVentaHoy = false, isFetching: fetchingMinoristaHayVenta } = useQuery({
+    queryKey: ['minorista-hay-venta-nueva-venta-hoy', user?.id, fechaHoy],
+    queryFn: async () => {
+      if (!user || user.rol !== 'minorista') return false;
+      return ventasMinoristasService.hasVentaRegistradaDesdeNuevaVentaEnFecha(user.id, fechaHoy);
+    },
+    enabled: !!user && user.rol === 'minorista',
+  });
+
+  const { data: mayoristaHayVentaHoy = false } = useQuery({
+    queryKey: ['mayorista-hay-venta-nueva-venta-hoy', user?.id, fechaHoy],
+    queryFn: async () => {
+      if (!user || user.rol !== 'mayorista') return false;
+      return ventasMayoristasService.hasVentaRegistradaDesdeNuevaVentaEnFecha(user.id, fechaHoy);
+    },
+    enabled: !!user && user.rol === 'mayorista',
+  });
+
+  const [minoristaJornadaIniciadaHoy, setMinoristaJornadaIniciadaHoy] = useState(false);
+  const [panelRefreshing, setPanelRefreshing] = useState(false);
+
+  const syncMinoristaJornadaDesdeStorage = useCallback(() => {
+    if (user?.rol !== 'minorista' || !user?.id) return;
+    setMinoristaJornadaIniciadaHoy(
+      localStorage.getItem(`ventasJcell_minorista_jornada_${user.id}_${fechaHoy}`) === '1'
+    );
+  }, [user?.id, user?.rol, fechaHoy]);
+
   useEffect(() => {
-    if (isSupported()) {
-      const enabled = isEnabled();
-      setNotificationEnabled(enabled);
-    }
-  }, [isSupported, isEnabled]);
+    syncMinoristaJornadaDesdeStorage();
+  }, [syncMinoristaJornadaDesdeStorage]);
 
-  // Toggle de notificaciones (activar/desactivar)
-  const handleToggleNotifications = async () => {
-    if (!isSupported()) {
-      toast.error('Las notificaciones no están soportadas en este navegador');
-      return;
-    }
+  const minoristaBloqueadoPorJornadaPendiente = useMemo(() => {
+    if (user?.rol !== 'minorista') return false;
+    if (minoristaHayVentaHoy) return false;
+    const ultima = minoristaUltimaFechaFinalizadaVenta;
+    if (ultima == null || ultima === '' || ultima >= fechaHoy) return false;
+    if (minoristaJornadaIniciadaHoy) return false;
+    return true;
+  }, [
+    user?.rol,
+    minoristaHayVentaHoy,
+    minoristaUltimaFechaFinalizadaVenta,
+    minoristaJornadaIniciadaHoy,
+    fechaHoy,
+  ]);
 
-    if (notificationEnabled) {
-      // Desactivar notificaciones
-      disable();
-      setNotificationEnabled(false);
-      toast.success('Notificaciones desactivadas');
-    } else {
-      // Activar notificaciones - primero verificar permisos
-      if (!hasPermission()) {
-        const permission = await requestPermission();
-        if (permission === 'granted') {
-          enable();
-          setNotificationEnabled(true);
-          toast.success('Notificaciones activadas');
-        } else if (permission === 'denied') {
-          toast.error('Permisos de notificaciones denegados. Por favor, habilítalos en la configuración del navegador.');
-        }
-      } else {
-        // Ya tiene permisos, solo habilitar
-        enable();
-        setNotificationEnabled(true);
-        toast.success('Notificaciones activadas');
+  const minoristaEstadoDiaBanner = useMemo(() => {
+    if (user?.rol !== 'minorista') return null;
+    if (fetchingMinoristaHayVenta) {
+      return { tone: 'muted' as const, text: 'Cargando estado del día…' };
+    }
+    if (minoristaHayVentaHoy) {
+      return {
+        tone: 'success' as const,
+        text: 'Hoy ya registraste la venta del día desde Nueva venta.',
+      };
+    }
+    if (minoristaBloqueadoPorJornadaPendiente) {
+      return {
+        tone: 'warning' as const,
+        text: 'Iniciá la jornada en Nueva venta antes de registrar ventas.',
+      };
+    }
+    if (minoristaJornadaIniciadaHoy) {
+      return {
+        tone: 'default' as const,
+        text: 'Jornada iniciada. Continuá en Nueva venta.',
+      };
+    }
+    return {
+      tone: 'muted' as const,
+      text: 'Empezá el día en Nueva venta: crear venta o revisar tu preregistro.',
+    };
+  }, [
+    user?.rol,
+    fetchingMinoristaHayVenta,
+    minoristaHayVentaHoy,
+    minoristaBloqueadoPorJornadaPendiente,
+    minoristaJornadaIniciadaHoy,
+  ]);
+
+  const mayoristaEstadoDiaBanner = useMemo(() => {
+    if (user?.rol !== 'mayorista') return null;
+    if (mayoristaHayVentaHoy) {
+      return {
+        tone: 'success' as const,
+        text: 'Venta del día registrada desde Nueva venta.',
+      };
+    }
+    return {
+      tone: 'muted' as const,
+      text: 'Gestioná ventas y pedidos desde Nueva venta.',
+    };
+  }, [user?.rol, mayoristaHayVentaHoy]);
+
+  const handleRefreshPanel = async () => {
+    setPanelRefreshing(true);
+    try {
+      await queryClient.invalidateQueries({ queryKey: ['sales'] });
+      await queryClient.invalidateQueries({ queryKey: ['pedidos'] });
+      await queryClient.invalidateQueries({ queryKey: ['preregistros'] });
+      await queryClient.invalidateQueries({ queryKey: ['products', 'low-stock'] });
+      await queryClient.invalidateQueries({ queryKey: ['servicios'] });
+      if (user?.rol === 'minorista') {
+        await queryClient.invalidateQueries({ queryKey: ['minorista-ultima-finalizada-preregistro'] });
+        await queryClient.invalidateQueries({ queryKey: ['minorista-hay-venta-nueva-venta-hoy'] });
       }
+      if (user?.rol === 'mayorista') {
+        await queryClient.invalidateQueries({ queryKey: ['mayorista-hay-venta-nueva-venta-hoy'] });
+      }
+      syncMinoristaJornadaDesdeStorage();
+      toast.success('Datos actualizados');
+    } finally {
+      setPanelRefreshing(false);
     }
   };
 
@@ -149,36 +233,48 @@ export default function Dashboard() {
     <DashboardLayout title="Panel de Control">
       <div className="space-y-4 sm:space-y-6">
         {/* Welcome Section */}
-        <div className="animate-slide-up flex items-center justify-between flex-wrap gap-4">
-          <div>
+        <div className="animate-slide-up flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 space-y-1">
             <h2 className="font-display text-2xl font-bold text-foreground">
               {getGreeting()}, {user?.nombre.split(' ')[0]}
             </h2>
-            <p className="text-muted-foreground">
-              Aquí tienes el resumen de hoy
-            </p>
+            <p className="text-muted-foreground">Aquí tienes el resumen de hoy</p>
+            {minoristaEstadoDiaBanner && (
+              <p
+                className={cn(
+                  'text-sm pt-1',
+                  minoristaEstadoDiaBanner.tone === 'success' && 'text-success font-medium',
+                  minoristaEstadoDiaBanner.tone === 'warning' && 'text-amber-700 dark:text-amber-400 font-medium',
+                  minoristaEstadoDiaBanner.tone === 'default' && 'text-foreground font-medium',
+                  minoristaEstadoDiaBanner.tone === 'muted' && 'text-muted-foreground'
+                )}
+              >
+                {minoristaEstadoDiaBanner.text}
+              </p>
+            )}
+            {mayoristaEstadoDiaBanner && (
+              <p
+                className={cn(
+                  'text-sm pt-1',
+                  mayoristaEstadoDiaBanner.tone === 'success' && 'text-success font-medium',
+                  mayoristaEstadoDiaBanner.tone === 'muted' && 'text-muted-foreground'
+                )}
+              >
+                {mayoristaEstadoDiaBanner.text}
+              </p>
+            )}
           </div>
-          {/* Botón de notificaciones desactivado - Solo se usan toasts */}
-          {/* {user?.rol === 'admin' && isSupported() && (
-            <Button
-              variant={notificationEnabled ? 'default' : 'outline'}
-              size="sm"
-              onClick={handleToggleNotifications}
-              className="gap-2"
-            >
-              {notificationEnabled ? (
-                <>
-                  <Bell className="h-4 w-4" />
-                  <span className="hidden sm:inline">Notificaciones ON</span>
-                </>
-              ) : (
-                <>
-                  <BellOff className="h-4 w-4" />
-                  <span className="hidden sm:inline">Notificaciones OFF</span>
-                </>
-              )}
-            </Button>
-          )} */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0 gap-2 self-start"
+            disabled={panelRefreshing}
+            onClick={() => void handleRefreshPanel()}
+          >
+            <RefreshCw className={cn('h-4 w-4', panelRefreshing && 'animate-spin')} />
+            Actualizar
+          </Button>
         </div>
 
         {/* Stats Grid */}
@@ -197,6 +293,11 @@ export default function Dashboard() {
                 <StatCard
                   title="Ventas del Día"
                   value={`Bs. ${totalVentasHoyMinoristaMayorista.toFixed(2)}`}
+                  subtitle={
+                    user?.rol === 'minorista'
+                      ? 'Monto en tickets POS registrados hoy'
+                      : 'Monto en ventas registradas hoy'
+                  }
                   icon={DollarSign}
                   variant="primary"
                   layout="horizontal-title"
@@ -204,14 +305,14 @@ export default function Dashboard() {
                 <StatCard
                   title="Número de Ventas"
                   value={numeroVentasHoyMinoristaMayorista}
-                  subtitle="transacciones hoy"
+                  subtitle="Transacciones POS de hoy"
                   icon={ShoppingBag}
                   layout="horizontal-title"
                 />
                 <StatCard
                   title="Total Pedidos"
                   value={totalPedidos}
-                  subtitle="pedidos registrados"
+                  subtitle={`${pedidosPendientes} pendientes · ${pedidosEnviados} enviados · ${pedidosEntregados} entregados`}
                   icon={Package}
                   variant="primary"
                   layout="horizontal-title"
@@ -279,8 +380,11 @@ export default function Dashboard() {
               <CardTitle className="font-display text-lg">Acciones Rápidas</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3">
-              <Button 
-                className="h-12 justify-start gap-3" 
+              <Button
+                className={cn(
+                  'justify-start gap-3',
+                  user?.rol === 'minorista' ? 'h-14 text-base font-semibold' : 'h-12'
+                )}
                 onClick={() => navigate('/ventas/nueva')}
               >
                 <ShoppingBag className="h-5 w-5" />
@@ -288,16 +392,36 @@ export default function Dashboard() {
               </Button>
               {isMinoristaMayorista ? (
                 <>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     className="h-12 justify-start gap-3"
                     onClick={() => navigate('/ventas')}
                   >
                     <Receipt className="h-5 w-5" />
                     Historial de Ventas
                   </Button>
-                  <Button 
-                    variant="outline" 
+                  {user?.rol === 'minorista' && (
+                    <Button
+                      variant="outline"
+                      className="h-12 justify-start gap-3"
+                      onClick={() => navigate('/arqueos/minorista')}
+                    >
+                      <Wallet className="h-5 w-5" />
+                      Ventas del día
+                    </Button>
+                  )}
+                  {user?.rol === 'mayorista' && (
+                    <Button
+                      variant="outline"
+                      className="h-12 justify-start gap-3"
+                      onClick={() => navigate('/arqueos/mayorista')}
+                    >
+                      <Wallet className="h-5 w-5" />
+                      Mis Arqueos
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
                     className="h-12 justify-start gap-3"
                     onClick={() => navigate('/pedidos')}
                   >
@@ -305,19 +429,46 @@ export default function Dashboard() {
                     Mis Pedidos
                   </Button>
                 </>
+              ) : user?.rol === 'vendedor' ? (
+                <>
+                  <Button
+                    variant="outline"
+                    className="h-12 justify-start gap-3"
+                    onClick={() => navigate('/ventas')}
+                  >
+                    <Receipt className="h-5 w-5" />
+                    Historial de Ventas
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-12 justify-start gap-3"
+                    onClick={() => navigate('/servicios')}
+                  >
+                    <Wrench className="h-5 w-5" />
+                    Servicios
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-12 justify-start gap-3"
+                    onClick={() => navigate('/servicios/registro')}
+                  >
+                    <ClipboardList className="h-5 w-5" />
+                    Registro de servicios
+                  </Button>
+                </>
               ) : (
                 user?.rol === 'admin' && (
                   <>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       className="h-12 justify-start gap-3"
                       onClick={() => navigate('/productos')}
                     >
                       <Package className="h-5 w-5" />
                       Ver Productos
                     </Button>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       className="h-12 justify-start gap-3"
                       onClick={() => navigate('/reportes')}
                     >
@@ -332,13 +483,22 @@ export default function Dashboard() {
 
           {/* Recent Sales / Recent Orders */}
           <Card className="lg:col-span-2 animate-fade-in">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="font-display text-lg">
-                Últimas Ventas
-              </CardTitle>
-              <Button 
-                variant="ghost" 
-                size="sm" 
+            <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0">
+              <div className="space-y-1.5">
+                <CardTitle className="font-display text-lg">
+                  {isMinoristaMayorista ? 'Últimas ventas registradas' : 'Últimas Ventas'}
+                </CardTitle>
+                {isMinoristaMayorista && (
+                  <CardDescription>
+                    Tickets POS recientes (varias fechas). Para el detalle del día: Nueva venta
+                    {user?.rol === 'minorista' ? ' o Ventas del día.' : ' o Mis Arqueos.'}
+                  </CardDescription>
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="shrink-0"
                 onClick={() => navigate('/ventas')}
               >
                 Ver todas
@@ -550,11 +710,14 @@ export default function Dashboard() {
         {/* Low Stock Alert */}
         {user?.rol === 'admin' && !loadingStock && productosStockBajo.length > 0 && (
           <Card className="border-warning/30 bg-warning/5 animate-fade-in">
-            <CardHeader>
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
               <CardTitle className="flex items-center gap-2 font-display text-lg text-warning">
                 <AlertTriangle className="h-5 w-5" />
                 Alertas de Stock
               </CardTitle>
+              <Button variant="outline" size="sm" onClick={() => navigate('/inventario/movimientos')}>
+                Ver inventario
+              </Button>
             </CardHeader>
             <CardContent>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

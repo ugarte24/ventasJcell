@@ -562,6 +562,7 @@ export default function NewSale() {
       setMinoristaJornadaIniciadaHoy(true);
       await queryClient.invalidateQueries({ queryKey: ['pedidos-gate'] });
       await queryClient.invalidateQueries({ queryKey: ['minorista-ultima-finalizada-preregistro'] });
+      await queryClient.invalidateQueries({ queryKey: ['minorista-hay-venta-nueva-venta-hoy'] });
       toast.success(
         'Nueva jornada iniciada: saldos al máximo según tu preregistro y los pedidos del día. Ya podés vender.'
       );
@@ -847,6 +848,7 @@ export default function NewSale() {
           void queryClient.invalidateQueries({ queryKey: ['minorista-ultima-finalizada-preregistro'] });
           void queryClient.invalidateQueries({ queryKey: ['pedidos-gate'] });
           void queryClient.invalidateQueries({ queryKey: ['preregistro-resumen-ventas-dia'] });
+          void queryClient.invalidateQueries({ queryKey: ['minorista-hay-venta-nueva-venta-hoy'] });
         } else if (user.rol === 'mayorista') {
           // Crear registros en ventas_mayoristas para cada producto vendido
           try {
@@ -880,6 +882,7 @@ export default function NewSale() {
             // No retornar aquí, permitir que continúe el flujo
           }
           void queryClient.invalidateQueries({ queryKey: ['preregistro-resumen-ventas-dia'] });
+          void queryClient.invalidateQueries({ queryKey: ['mayorista-hay-venta-nueva-venta-hoy'] });
         }
 
         // Guardar datos de la venta
