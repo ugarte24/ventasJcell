@@ -95,6 +95,7 @@ import { es } from 'date-fns/locale';
 import { cn, getLocalDateISO } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import { usuarioControlDiarioService } from '@/services/usuario-control-diario.service';
+import { minoristaJornadaDiariaService } from '@/services/minorista-jornada-diaria.service';
 import { ventasMinoristasService } from '@/services/ventas-minoristas.service';
 import { ventasMayoristasService } from '@/services/ventas-mayoristas.service';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -118,6 +119,7 @@ export default function Pedidos() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [pedidoToDelete, setPedidoToDelete] = useState<string | null>(null);
   const itemsPerPage = 20;
+  const fechaHoy = getLocalDateISO();
 
   // Obtener preregistros según el rol
   const { data: preregistros = [], isLoading: loadingPreregistros } = useQuery({
@@ -204,12 +206,12 @@ export default function Pedidos() {
   }, [pedidosFiltrados.length, currentPage, totalPages]);
 
   const { data: pedidosGate } = useQuery({
-    queryKey: ['pedidos-gate', user?.id, user?.rol],
+    queryKey: ['pedidos-gate', user?.id, user?.rol, fechaHoy],
     queryFn: async () => {
       if (!user || (user.rol !== 'minorista' && user.rol !== 'mayorista')) {
         return { puede: true as const };
       }
-      const fecha = getLocalDateISO();
+      const fecha = fechaHoy;
       const control = await usuarioControlDiarioService.getByUsuarioYFecha(user.id, fecha);
       if (control?.pedidos_habilitado) {
         return { puede: true as const };
@@ -219,8 +221,15 @@ export default function Pedidos() {
         if (hay) return { puede: false as const, motivo: 'venta' as const };
         const ultima = await ventasMinoristasService.getUltimaFechaVentaDesdeNuevaVenta(user.id);
         if (ultima && ultima < fecha) {
-          const j = localStorage.getItem(`ventasJcell_minorista_jornada_${user.id}_${fecha}`);
-          if (j !== '1') return { puede: false as const, motivo: 'jornada' as const };
+          let jornadaOk = false;
+          try {
+            const jrow = await minoristaJornadaDiariaService.getByUsuarioYFecha(user.id, fecha);
+            jornadaOk = jrow != null;
+          } catch {
+            jornadaOk =
+              localStorage.getItem(`ventasJcell_minorista_jornada_${user.id}_${fecha}`) === '1';
+          }
+          if (!jornadaOk) return { puede: false as const, motivo: 'jornada' as const };
         }
       } else {
         const hay = await ventasMayoristasService.hasVentaRegistradaDesdeNuevaVentaEnFecha(user.id, fecha);

@@ -52,7 +52,7 @@ export function DashboardLayout({ children, title }: DashboardLayoutProps) {
               </span>
             </div>
           </header>
-          <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 lg:p-6 relative z-0 min-h-0 w-full">
+          <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 lg:p-6 relative min-h-0 w-full">
             {children}
           </main>
         </SidebarInset>

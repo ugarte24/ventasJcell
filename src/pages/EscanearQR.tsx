@@ -29,6 +29,10 @@ import { toast } from 'sonner';
 import { transferenciasService } from '@/services/transferencias.service';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { getLocalDateISO } from '@/lib/utils';
+import {
+  minoristaJornadaDiariaService,
+  MINORISTA_JORNADA_DIARIA_QUERY_KEY,
+} from '@/services/minorista-jornada-diaria.service';
 import { TransferenciaSaldo } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
@@ -68,16 +72,24 @@ export default function EscanearQR() {
       if (!user) throw new Error('Usuario no autenticado');
       return await transferenciasService.escanearQR(codigo, user.id);
     },
-    onSuccess: (transferencia) => {
+    onSuccess: async (transferencia) => {
       setTransferenciaEncontrada(transferencia);
       setShowConfirmDialog(true);
       queryClient.invalidateQueries({ queryKey: ['transferencias-saldos'] });
       queryClient.invalidateQueries({ queryKey: ['preregistros-minorista'] });
       if (user) {
-        localStorage.setItem(
-          `ventasJcell_minorista_jornada_${user.id}_${getLocalDateISO()}`,
-          '1'
-        );
+        const hoy = getLocalDateISO();
+        try {
+          await minoristaJornadaDiariaService.marcarIniciada(user.id, hoy);
+          localStorage.removeItem(`ventasJcell_minorista_jornada_${user.id}_${hoy}`);
+        } catch (e) {
+          toast.error(
+            e instanceof Error
+              ? e.message
+              : 'La transferencia se aplicó pero no se pudo registrar la jornada en el servidor.'
+          );
+        }
+        await queryClient.invalidateQueries({ queryKey: [MINORISTA_JORNADA_DIARIA_QUERY_KEY] });
         queryClient.invalidateQueries({ queryKey: ['pedidos-gate'] });
       }
     },

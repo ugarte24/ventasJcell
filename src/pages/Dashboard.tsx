@@ -10,13 +10,17 @@ import { useTodaySales, useSales } from '@/hooks/useSales';
 import { useLowStockProducts } from '@/hooks/useProducts';
 import { useServicios } from '@/hooks/useServicios';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { pedidosService } from '@/services/pedidos.service';
 import { preregistrosService } from '@/services/preregistros.service';
 import { ventasMinoristasService } from '@/services/ventas-minoristas.service';
 import { ventasMayoristasService } from '@/services/ventas-mayoristas.service';
+import {
+  minoristaJornadaDiariaService,
+  MINORISTA_JORNADA_DIARIA_QUERY_KEY,
+} from '@/services/minorista-jornada-diaria.service';
 import { getLocalDateISO, cn } from '@/lib/utils';
 import { NotificacionesArqueo } from '@/components/NotificacionesArqueo';
 
@@ -100,19 +104,17 @@ export default function Dashboard() {
     enabled: !!user && user.rol === 'mayorista',
   });
 
-  const [minoristaJornadaIniciadaHoy, setMinoristaJornadaIniciadaHoy] = useState(false);
+  const { data: minoristaJornadaIniciadaHoy = false } = useQuery({
+    queryKey: [MINORISTA_JORNADA_DIARIA_QUERY_KEY, user?.id, fechaHoy],
+    queryFn: async () => {
+      if (!user || user.rol !== 'minorista') return false;
+      const row = await minoristaJornadaDiariaService.getByUsuarioYFecha(user.id, fechaHoy);
+      return row != null;
+    },
+    enabled: !!user && user.rol === 'minorista',
+  });
+
   const [panelRefreshing, setPanelRefreshing] = useState(false);
-
-  const syncMinoristaJornadaDesdeStorage = useCallback(() => {
-    if (user?.rol !== 'minorista' || !user?.id) return;
-    setMinoristaJornadaIniciadaHoy(
-      localStorage.getItem(`ventasJcell_minorista_jornada_${user.id}_${fechaHoy}`) === '1'
-    );
-  }, [user?.id, user?.rol, fechaHoy]);
-
-  useEffect(() => {
-    syncMinoristaJornadaDesdeStorage();
-  }, [syncMinoristaJornadaDesdeStorage]);
 
   const minoristaBloqueadoPorJornadaPendiente = useMemo(() => {
     if (user?.rol !== 'minorista') return false;
@@ -189,11 +191,11 @@ export default function Dashboard() {
       if (user?.rol === 'minorista') {
         await queryClient.invalidateQueries({ queryKey: ['minorista-ultima-finalizada-preregistro'] });
         await queryClient.invalidateQueries({ queryKey: ['minorista-hay-venta-nueva-venta-hoy'] });
+        await queryClient.invalidateQueries({ queryKey: [MINORISTA_JORNADA_DIARIA_QUERY_KEY] });
       }
       if (user?.rol === 'mayorista') {
         await queryClient.invalidateQueries({ queryKey: ['mayorista-hay-venta-nueva-venta-hoy'] });
       }
-      syncMinoristaJornadaDesdeStorage();
       toast.success('Datos actualizados');
     } finally {
       setPanelRefreshing(false);

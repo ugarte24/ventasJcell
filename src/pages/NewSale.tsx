@@ -17,6 +17,10 @@ import { pagosMayoristasService } from '@/services/pagos-mayoristas.service';
 import { ventasMinoristasService } from '@/services/ventas-minoristas.service';
 import { ventasMayoristasService } from '@/services/ventas-mayoristas.service';
 import {
+  minoristaJornadaDiariaService,
+  MINORISTA_JORNADA_DIARIA_QUERY_KEY,
+} from '@/services/minorista-jornada-diaria.service';
+import {
   getLocalDateISO,
   getLocalTimeISO,
   formatDateOnlyLocal,
@@ -77,6 +81,7 @@ import {
 } from '@/components/ui/popover';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useSidebar } from '@/components/ui/sidebar';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useIsDesktopLarge } from '@/hooks/use-desktop-large';
 import {
@@ -154,12 +159,9 @@ function fechaLocalToISO(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-function minoristaJornadaIniciadaStorageKey(userId: string, fechaISO: string) {
-  return `ventasJcell_minorista_jornada_${userId}_${fechaISO}`;
-}
-
 export default function NewSale() {
   const isMobile = useIsMobile();
+  const { state: sidebarDesktopState } = useSidebar();
   const isDesktopLarge = useIsDesktopLarge();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>('efectivo');
@@ -219,7 +221,6 @@ export default function NewSale() {
   const [qrCode, setQrCode] = useState<string>('');
   const [transferenciaCreada, setTransferenciaCreada] = useState<TransferenciaSaldo | null>(null);
   const [minoristaHayVentaNuevaVentaHoy, setMinoristaHayVentaNuevaVentaHoy] = useState(false);
-  const [minoristaJornadaIniciadaHoy, setMinoristaJornadaIniciadaHoy] = useState(false);
   const [iniciandoJornadaMinorista, setIniciandoJornadaMinorista] = useState(false);
   /** Fecha consultada en la tarjeta de preregistro (minorista); venta / jornada / QR solo aplican si es hoy. */
   const [fechaVistaMinorista, setFechaVistaMinorista] = useState(() => getLocalDateISO());
@@ -237,6 +238,16 @@ export default function NewSale() {
     queryFn: async () => {
       if (!user || user.rol !== 'minorista') return null;
       return ventasMinoristasService.getUltimaFechaVentaDesdeNuevaVenta(user.id);
+    },
+    enabled: !!user && user.rol === 'minorista',
+  });
+
+  const { data: minoristaJornadaIniciadaHoy = false } = useQuery({
+    queryKey: [MINORISTA_JORNADA_DIARIA_QUERY_KEY, user?.id, fechaHoy],
+    queryFn: async () => {
+      if (!user || user.rol !== 'minorista') return false;
+      const row = await minoristaJornadaDiariaService.getByUsuarioYFecha(user.id, fechaHoy);
+      return row != null;
     },
     enabled: !!user && user.rol === 'minorista',
   });
@@ -304,15 +315,6 @@ export default function NewSale() {
     setFechaVistaMinorista(picked);
     setCalendarioMinoristaOpen(false);
   }, []);
-
-  useEffect(() => {
-    if (user?.rol !== 'minorista' || !user.id) {
-      setMinoristaJornadaIniciadaHoy(false);
-      return;
-    }
-    const v = localStorage.getItem(minoristaJornadaIniciadaStorageKey(user.id, fechaHoy));
-    setMinoristaJornadaIniciadaHoy(v === '1');
-  }, [user?.id, user?.rol, fechaHoy, location.pathname]);
 
   useEffect(() => {
     if (user?.rol !== 'minorista' || !user.id) {
@@ -437,12 +439,8 @@ export default function NewSale() {
             } else if (p.cantidad_restante != null && !Number.isNaN(Number(p.cantidad_restante))) {
               cantidadRestante = Math.max(0, Math.min(Number(p.cantidad_restante), saldoDisponible));
             } else {
-              const storageKey = `preregistro_saldo_${user.id}_${p.id}`;
-              const saldoGuardado = localStorage.getItem(storageKey);
-              cantidadRestante =
-                saldoGuardado !== null
-                  ? Math.max(0, Math.min(parseInt(saldoGuardado, 10), saldoDisponible))
-                  : saldoDisponible;
+              // Solo BD: sin fallback localStorage (la columna/RPC debe existir en Supabase)
+              cantidadRestante = saldoDisponible;
             }
             
             return {
@@ -494,12 +492,7 @@ export default function NewSale() {
             if (p.cantidad_restante != null && !Number.isNaN(Number(p.cantidad_restante))) {
               cantidadRestante = Math.max(0, Math.min(Number(p.cantidad_restante), saldoDisponible));
             } else {
-              const storageKey = `preregistro_saldo_${user.id}_${p.id}`;
-              const saldoGuardado = localStorage.getItem(storageKey);
-              cantidadRestante =
-                saldoGuardado !== null
-                  ? Math.max(0, Math.min(parseInt(saldoGuardado, 10), saldoDisponible))
-                  : saldoDisponible;
+              cantidadRestante = saldoDisponible;
             }
             
             return {
@@ -558,8 +551,9 @@ export default function NewSale() {
       for (const item of preregistroItems) {
         localStorage.removeItem(`preregistro_saldo_${user.id}_${item.id}`);
       }
-      localStorage.setItem(minoristaJornadaIniciadaStorageKey(user.id, fechaHoy), '1');
-      setMinoristaJornadaIniciadaHoy(true);
+      await minoristaJornadaDiariaService.marcarIniciada(user.id, fechaHoy);
+      localStorage.removeItem(`ventasJcell_minorista_jornada_${user.id}_${fechaHoy}`);
+      await queryClient.invalidateQueries({ queryKey: [MINORISTA_JORNADA_DIARIA_QUERY_KEY] });
       await queryClient.invalidateQueries({ queryKey: ['pedidos-gate'] });
       await queryClient.invalidateQueries({ queryKey: ['minorista-ultima-finalizada-preregistro'] });
       await queryClient.invalidateQueries({ queryKey: ['minorista-hay-venta-nueva-venta-hoy'] });
@@ -1291,27 +1285,34 @@ export default function NewSale() {
 
   // Mostrar Sheet cuando NO estamos en desktop grande (tablet o móvil)
   const shouldShowSheet = !isDesktopLarge;
+  const showMobileResumenButton =
+    shouldShowSheet &&
+    !(
+      user?.rol === 'minorista' &&
+      !minoristaConsultaEsHoy &&
+      !cargandoVentasResumenDia &&
+      lineasResumenVentasRegistradas.length === 0
+    );
+  const esMinoristaOMayorista = user?.rol === 'minorista' || user?.rol === 'mayorista';
 
   return (
     <DashboardLayout title="Nueva Venta">
-      {/* Botón flotante del carrito/resumen - Tablet y móvil (cuando NO es desktop grande) */}
-      {shouldShowSheet &&
-        !(
-          user?.rol === 'minorista' &&
-          !minoristaConsultaEsHoy &&
-          !cargandoVentasResumenDia &&
-          lineasResumenVentasRegistradas.length === 0
-        ) && (
+      {/* Carrito flotante solo vendedor/admin: esquina inferior izquierda para no tapar tablas a la derecha */}
+      {showMobileResumenButton && !esMinoristaOMayorista && (
         <Button
           onClick={() => setShowCartSheet(true)}
-          className="fixed bottom-6 right-6 z-[100] h-14 w-14 rounded-full shadow-lg"
+          className={cn(
+            'fixed z-[110] h-14 w-14 rounded-full shadow-lg',
+            'bottom-[max(1.5rem,env(safe-area-inset-bottom,0px)+0.5rem)] md:bottom-6',
+            isMobile
+              ? 'left-4 sm:left-6'
+              : sidebarDesktopState === 'expanded'
+                ? 'left-4 sm:left-6 md:left-[calc(var(--sidebar-width)+0.75rem)]'
+                : 'left-4 sm:left-6 md:left-[calc(var(--sidebar-width-icon)+0.75rem)]'
+          )}
           size="icon"
         >
-          {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
-            <ClipboardList className="h-6 w-6" />
-          ) : (
-            <ShoppingCart className="h-6 w-6" />
-          )}
+          <ShoppingCart className="h-6 w-6" />
           {itemCount > 0 && (
             <Badge className="absolute -top-2 -right-2 h-6 w-6 flex items-center justify-center p-0 rounded-full">
               {itemCount}
@@ -1335,43 +1336,66 @@ export default function NewSale() {
                         : 'Consulta (Minorista)'
                       : 'Preregistros Mayorista'}
                   </CardTitle>
-                  {user.rol === 'minorista' && (
+                  {(user.rol === 'minorista' ||
+                    (user.rol === 'mayorista' && showMobileResumenButton)) && (
                     <div className="flex flex-wrap items-center gap-2 shrink-0">
-                      <Popover open={calendarioMinoristaOpen} onOpenChange={setCalendarioMinoristaOpen}>
-                        <PopoverTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="gap-2 justify-start min-w-[200px] sm:min-w-[220px]"
-                          >
-                            <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                            <span className="truncate">{formatDateOnlyLocal(fechaVistaMinorista)}</span>
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="end">
-                          <Calendar
-                            mode="single"
-                            month={calendarMonthMinorista}
-                            onMonthChange={setCalendarMonthMinorista}
-                            selected={parseDateOnlyLocal(fechaVistaMinorista)}
-                            onSelect={handleCalendarioMinoristaSelect}
-                            disabled={(date) => fechaLocalToISO(date) > getLocalDateISO()}
-                            className="rounded-md border"
-                          />
-                          <div className="border-t p-2 flex justify-center">
+                      {user.rol === 'minorista' && (
+                        <Popover open={calendarioMinoristaOpen} onOpenChange={setCalendarioMinoristaOpen}>
+                          <PopoverTrigger asChild>
                             <Button
                               type="button"
-                              variant="secondary"
+                              variant="outline"
                               size="sm"
-                              disabled={fechaVistaMinorista === getLocalDateISO()}
-                              onClick={() => setFechaVistaMinorista(getLocalDateISO())}
+                              className="gap-2 justify-start min-w-[200px] sm:min-w-[220px]"
                             >
-                              Ir a hoy
+                              <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                              <span className="truncate">{formatDateOnlyLocal(fechaVistaMinorista)}</span>
                             </Button>
-                          </div>
-                        </PopoverContent>
-                      </Popover>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="end">
+                            <Calendar
+                              mode="single"
+                              month={calendarMonthMinorista}
+                              onMonthChange={setCalendarMonthMinorista}
+                              selected={parseDateOnlyLocal(fechaVistaMinorista)}
+                              onSelect={handleCalendarioMinoristaSelect}
+                              disabled={(date) => fechaLocalToISO(date) > getLocalDateISO()}
+                              className="rounded-md border"
+                            />
+                            <div className="border-t p-2 flex justify-center">
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                disabled={fechaVistaMinorista === getLocalDateISO()}
+                                onClick={() => setFechaVistaMinorista(getLocalDateISO())}
+                              >
+                                Ir a hoy
+                              </Button>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      )}
+                      {showMobileResumenButton && (
+                        <Button
+                          type="button"
+                          variant="default"
+                          size="sm"
+                          className="relative gap-2"
+                          onClick={() => setShowCartSheet(true)}
+                        >
+                          <ClipboardList className="h-4 w-4 shrink-0" />
+                          <span className="font-medium">Resumen</span>
+                          {itemCount > 0 && (
+                            <Badge
+                              variant="secondary"
+                              className="h-5 min-w-[1.25rem] px-1.5 flex items-center justify-center rounded-full"
+                            >
+                              {itemCount}
+                            </Badge>
+                          )}
+                        </Button>
+                      )}
                     </div>
                   )}
                 </div>
