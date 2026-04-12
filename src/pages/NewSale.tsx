@@ -159,9 +159,41 @@ function fechaLocalToISO(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-export default function NewSale() {
+/** Debe renderizarse dentro de DashboardLayout (SidebarProvider); no usar useSidebar en el padre NewSale. */
+function VendedorMobileCartFab({
+  itemCount,
+  onOpen,
+}: {
+  itemCount: number;
+  onOpen: () => void;
+}) {
   const isMobile = useIsMobile();
   const { state: sidebarDesktopState } = useSidebar();
+  return (
+    <Button
+      onClick={onOpen}
+      className={cn(
+        'fixed z-[110] h-14 w-14 rounded-full shadow-lg',
+        'bottom-[max(1.5rem,env(safe-area-inset-bottom,0px)+0.5rem)] md:bottom-6',
+        isMobile
+          ? 'left-4 sm:left-6'
+          : sidebarDesktopState === 'expanded'
+            ? 'left-4 sm:left-6 md:left-[calc(var(--sidebar-width)+0.75rem)]'
+            : 'left-4 sm:left-6 md:left-[calc(var(--sidebar-width-icon)+0.75rem)]'
+      )}
+      size="icon"
+    >
+      <ShoppingCart className="h-6 w-6" />
+      {itemCount > 0 && (
+        <Badge className="absolute -top-2 -right-2 h-6 w-6 flex items-center justify-center p-0 rounded-full">
+          {itemCount}
+        </Badge>
+      )}
+    </Button>
+  );
+}
+
+export default function NewSale() {
   const isDesktopLarge = useIsDesktopLarge();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>('efectivo');
@@ -1299,26 +1331,7 @@ export default function NewSale() {
     <DashboardLayout title="Nueva Venta">
       {/* Carrito flotante solo vendedor/admin: esquina inferior izquierda para no tapar tablas a la derecha */}
       {showMobileResumenButton && !esMinoristaOMayorista && (
-        <Button
-          onClick={() => setShowCartSheet(true)}
-          className={cn(
-            'fixed z-[110] h-14 w-14 rounded-full shadow-lg',
-            'bottom-[max(1.5rem,env(safe-area-inset-bottom,0px)+0.5rem)] md:bottom-6',
-            isMobile
-              ? 'left-4 sm:left-6'
-              : sidebarDesktopState === 'expanded'
-                ? 'left-4 sm:left-6 md:left-[calc(var(--sidebar-width)+0.75rem)]'
-                : 'left-4 sm:left-6 md:left-[calc(var(--sidebar-width-icon)+0.75rem)]'
-          )}
-          size="icon"
-        >
-          <ShoppingCart className="h-6 w-6" />
-          {itemCount > 0 && (
-            <Badge className="absolute -top-2 -right-2 h-6 w-6 flex items-center justify-center p-0 rounded-full">
-              {itemCount}
-            </Badge>
-          )}
-        </Button>
+        <VendedorMobileCartFab itemCount={itemCount} onOpen={() => setShowCartSheet(true)} />
       )}
 
       <div className={cn("grid gap-4 sm:gap-6", isDesktopLarge && "lg:grid-cols-3")}>
