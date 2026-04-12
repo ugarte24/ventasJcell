@@ -1,4 +1,6 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useCart } from '@/contexts/CartContext';
 import { PaymentMethod, Client } from '@/types';
@@ -137,6 +139,10 @@ function formatFechaVentaLocalLegible(): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+function minoristaJornadaIniciadaStorageKey(userId: string, fechaISO: string) {
+  return `ventasJcell_minorista_jornada_${userId}_${fechaISO}`;
+}
+
 export default function NewSale() {
   const isMobile = useIsMobile();
   const isDesktopLarge = useIsDesktopLarge();
@@ -165,6 +171,10 @@ export default function NewSale() {
   
   const { items, addItem, removeItem, updateQuantity, clearCart, total, itemCount } = useCart();
   const { user, refreshUserProfile } = useAuth();
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const fechaHoy = getLocalDateISO();
   const ocultarSelectorMetodoPago =
     user?.rol === 'minorista' || user?.rol === 'mayorista';
 
@@ -194,6 +204,17 @@ export default function NewSale() {
   const [qrCode, setQrCode] = useState<string>('');
   const [transferenciaCreada, setTransferenciaCreada] = useState<TransferenciaSaldo | null>(null);
   const [minoristaHayVentaNuevaVentaHoy, setMinoristaHayVentaNuevaVentaHoy] = useState(false);
+  const [minoristaJornadaIniciadaHoy, setMinoristaJornadaIniciadaHoy] = useState(false);
+  const [iniciandoJornadaMinorista, setIniciandoJornadaMinorista] = useState(false);
+
+  const { data: minoristaUltimaFechaFinalizadaVenta } = useQuery({
+    queryKey: ['minorista-ultima-finalizada-preregistro', user?.id],
+    queryFn: async () => {
+      if (!user || user.rol !== 'minorista') return null;
+      return ventasMinoristasService.getUltimaFechaVentaDesdeNuevaVenta(user.id);
+    },
+    enabled: !!user && user.rol === 'minorista',
+  });
 
   const minoristaPuedeEditarPreregistro = useMemo(() => {
     if (user?.rol !== 'minorista') return true;
@@ -207,6 +228,30 @@ export default function NewSale() {
     user?.rol === 'minorista' && !minoristaPuedeEditarPreregistro;
   const minoristaMostrarQREnLugarDeFinalizar =
     minoristaEdicionBloqueada && Boolean(qrCode.trim());
+
+  const minoristaBloqueadoPorJornadaPendiente = useMemo(() => {
+    if (user?.rol !== 'minorista') return false;
+    if (minoristaHayVentaNuevaVentaHoy) return false;
+    const ultima = minoristaUltimaFechaFinalizadaVenta;
+    if (ultima == null || ultima === '' || ultima >= fechaHoy) return false;
+    if (minoristaJornadaIniciadaHoy) return false;
+    return true;
+  }, [
+    user?.rol,
+    minoristaHayVentaNuevaVentaHoy,
+    minoristaUltimaFechaFinalizadaVenta,
+    minoristaJornadaIniciadaHoy,
+    fechaHoy,
+  ]);
+
+  useEffect(() => {
+    if (user?.rol !== 'minorista' || !user.id) {
+      setMinoristaJornadaIniciadaHoy(false);
+      return;
+    }
+    const v = localStorage.getItem(minoristaJornadaIniciadaStorageKey(user.id, fechaHoy));
+    setMinoristaJornadaIniciadaHoy(v === '1');
+  }, [user?.id, user?.rol, fechaHoy, location.pathname]);
 
   useEffect(() => {
     if (user?.rol !== 'minorista' || !user.id) {
@@ -407,10 +452,50 @@ export default function NewSale() {
     };
 
     loadPreregistros();
-  }, [user]);
+  }, [user, location.pathname]);
+
+  const handleIniciarJornadaMinorista = useCallback(async () => {
+    if (!user || user.rol !== 'minorista') return;
+    if (preregistroItems.length === 0) {
+      toast.error('No hay preregistros');
+      return;
+    }
+    setIniciandoJornadaMinorista(true);
+    try {
+      for (const item of preregistroItems) {
+        const full = item.cantidad + item.aumento;
+        await preregistrosService.updateCantidadRestanteMinorista(item.id, full);
+      }
+      setPreregistroItems((prev) =>
+        prev.map((i) => ({
+          ...i,
+          cantidadRestante: i.cantidad + i.aumento,
+          subtotal: 0,
+        }))
+      );
+      for (const item of preregistroItems) {
+        localStorage.removeItem(`preregistro_saldo_${user.id}_${item.id}`);
+      }
+      localStorage.setItem(minoristaJornadaIniciadaStorageKey(user.id, fechaHoy), '1');
+      setMinoristaJornadaIniciadaHoy(true);
+      await queryClient.invalidateQueries({ queryKey: ['pedidos-gate'] });
+      await queryClient.invalidateQueries({ queryKey: ['minorista-ultima-finalizada-preregistro'] });
+      toast.success(
+        'Nueva jornada iniciada: saldos al máximo según tu preregistro y los pedidos del día. Ya podés vender.'
+      );
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo iniciar la jornada');
+    } finally {
+      setIniciandoJornadaMinorista(false);
+    }
+  }, [user, preregistroItems, queryClient, fechaHoy]);
 
   const handleUpdateCantidadRestante = async (itemId: string, newValue: number) => {
     if (!user) return;
+    if (user.rol === 'minorista' && minoristaBloqueadoPorJornadaPendiente) {
+      toast.error('Iniciá la nueva jornada antes de editar saldos.');
+      return;
+    }
     if (user.rol === 'minorista' && !minoristaPuedeEditarPreregistro) {
       toast.error(
         'No puedes editar los saldos. Un administrador debe habilitar la edición en Gestión de usuarios.'
@@ -512,6 +597,12 @@ export default function NewSale() {
 
     // Si es minorista o mayorista, usar preregistros
     if (user.rol === 'minorista' || user.rol === 'mayorista') {
+      if (user.rol === 'minorista' && minoristaBloqueadoPorJornadaPendiente) {
+        toast.error(
+          'Iniciá la nueva jornada (botón en preregistros) o cargá saldos con QR antes de finalizar.'
+        );
+        return;
+      }
       if (user.rol === 'minorista' && !minoristaPuedeEditarPreregistro) {
         toast.error(
           'Ya finalizaste la venta. Un administrador debe habilitar de nuevo la edición en Gestión de usuarios.'
@@ -617,6 +708,8 @@ export default function NewSale() {
             }
           }
           setMinoristaHayVentaNuevaVentaHoy(true);
+          void queryClient.invalidateQueries({ queryKey: ['minorista-ultima-finalizada-preregistro'] });
+          void queryClient.invalidateQueries({ queryKey: ['pedidos-gate'] });
         } else if (user.rol === 'mayorista') {
           // Crear registros en ventas_mayoristas para cada producto vendido
           try {
@@ -1100,6 +1193,49 @@ export default function NewSale() {
                   <div className="text-center py-8 text-muted-foreground">
                     No hay preregistros para el día de hoy
                   </div>
+                ) : user?.rol === 'minorista' && minoristaBloqueadoPorJornadaPendiente ? (
+                  <div className="space-y-6 py-2">
+                    <Alert>
+                      <AlertDescription>
+                        <span className="font-medium">Jornada anterior cerrada.</span> Ya finalizaste una venta en un día
+                        anterior. Para trabajar hoy, elegí una opción:
+                      </AlertDescription>
+                    </Alert>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center">
+                      <Button
+                        type="button"
+                        className="h-12 gap-2 text-base w-full sm:w-auto sm:min-w-[220px]"
+                        onClick={() => void handleIniciarJornadaMinorista()}
+                        disabled={iniciandoJornadaMinorista || preregistroItems.length === 0}
+                      >
+                        {iniciandoJornadaMinorista ? (
+                          <>
+                            <Loader className="h-5 w-5 animate-spin" />
+                            Preparando…
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="h-5 w-5" />
+                            Crear nueva venta
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-12 gap-2 text-base w-full sm:w-auto sm:min-w-[220px]"
+                        onClick={() => navigate('/escanear-qr')}
+                      >
+                        <QrCode className="h-5 w-5" />
+                        Escaneo por QR
+                      </Button>
+                    </div>
+                    <p className="text-xs text-center text-muted-foreground max-w-xl mx-auto px-1">
+                      <strong>Crear nueva venta</strong> deja los saldos al máximo según tu preregistro y los pedidos
+                      entregados hoy. <strong>Escaneo por QR</strong> recibe saldos de otro minorista. Cuando veas la
+                      tabla de preregistros podrás abrir <strong>Pedidos</strong> desde ahí.
+                    </p>
+                  </div>
                 ) : (
                   <div className="space-y-4">
                     {user?.rol === 'minorista' && minoristaEdicionBloqueada && (
@@ -1109,6 +1245,20 @@ export default function NewSale() {
                           volver a habilitar la edición en Gestión de usuarios.
                         </AlertDescription>
                       </Alert>
+                    )}
+                    {(user?.rol === 'minorista' || user?.rol === 'mayorista') && (
+                      <div className="flex justify-end -mx-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                          onClick={() => navigate('/pedidos')}
+                        >
+                          <Package className="h-4 w-4" />
+                          Pedidos
+                        </Button>
+                      </div>
                     )}
                     <div className="rounded-lg border -mx-4 sm:-mx-6 lg:mx-0 overflow-hidden">
                       <div className="p-2 sm:p-4 lg:p-6">
@@ -1147,7 +1297,8 @@ export default function NewSale() {
                             <tbody className="[&_tr:last-child]:border-0">
                               {preregistroItems.map((item) => {
                                 const minoristaSaldoBloqueado =
-                                  user?.rol === 'minorista' && !minoristaPuedeEditarPreregistro;
+                                  user?.rol === 'minorista' &&
+                                  (!minoristaPuedeEditarPreregistro || minoristaBloqueadoPorJornadaPendiente);
                                 return (
                                 <tr key={item.id} className="border-b transition-colors hover:bg-muted/50">
                                   <td className="p-1.5 sm:p-2 md:p-4 align-middle">
@@ -1817,6 +1968,11 @@ export default function NewSale() {
                             </div>
                           )}
                         </>
+                      ) : user?.rol === 'minorista' && minoristaBloqueadoPorJornadaPendiente ? (
+                        <p className="text-sm text-center text-muted-foreground px-2 py-2">
+                          Iniciá la jornada con <strong>Crear nueva venta</strong> o <strong>Escaneo por QR</strong> en el
+                          panel de preregistros.
+                        </p>
                       ) : (
                         <>
                           <Button
@@ -2742,6 +2898,20 @@ export default function NewSale() {
                             </p>
                           </div>
                         )}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => setShowCartSheet(false)}
+                        >
+                          Cerrar
+                        </Button>
+                      </>
+                    ) : user?.rol === 'minorista' && minoristaBloqueadoPorJornadaPendiente ? (
+                      <>
+                        <p className="text-sm text-center text-muted-foreground px-2">
+                          Usá los botones en el panel <strong>Preregistros Minorista</strong> (arriba): nueva venta o QR.
+                        </p>
                         <Button
                           type="button"
                           variant="outline"

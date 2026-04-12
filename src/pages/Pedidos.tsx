@@ -217,6 +217,11 @@ export default function Pedidos() {
       if (user.rol === 'minorista') {
         const hay = await ventasMinoristasService.hasVentaRegistradaDesdeNuevaVentaEnFecha(user.id, fecha);
         if (hay) return { puede: false as const, motivo: 'venta' as const };
+        const ultima = await ventasMinoristasService.getUltimaFechaVentaDesdeNuevaVenta(user.id);
+        if (ultima && ultima < fecha) {
+          const j = localStorage.getItem(`ventasJcell_minorista_jornada_${user.id}_${fecha}`);
+          if (j !== '1') return { puede: false as const, motivo: 'jornada' as const };
+        }
       } else {
         const hay = await ventasMayoristasService.hasVentaRegistradaDesdeNuevaVentaEnFecha(user.id, fecha);
         if (hay) return { puede: false as const, motivo: 'venta' as const };
@@ -482,7 +487,9 @@ export default function Pedidos() {
             disabled={!puedeCrearPedido}
             title={
               !puedeCrearPedido
-                ? 'Un administrador debe habilitar pedidos para hoy en Control de usuarios mayoristas y minoristas'
+                ? pedidosGate?.motivo === 'jornada'
+                  ? 'Iniciá la nueva jornada en Nueva venta o cargá saldos con QR antes de pedir productos'
+                  : 'Un administrador debe habilitar pedidos para hoy en Control de usuarios mayoristas y minoristas'
                 : undefined
             }
           >
@@ -496,10 +503,20 @@ export default function Pedidos() {
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Pedidos no disponibles hoy</AlertTitle>
             <AlertDescription>
-              Finalizaste la venta desde Nueva venta. Un administrador debe habilitar &quot;Pedidos (solo esta
-              fecha)&quot; para tu usuario en{' '}
-              <strong>Control de usuarios mayoristas y minoristas</strong> (menú Control de ventas). Esa
-              habilitación aplica únicamente al día indicado.
+              {pedidosGate?.motivo === 'jornada' ? (
+                <>
+                  Cerraste la jornada en un día anterior. En <strong>Nueva venta</strong>, en el panel{' '}
+                  <strong>Preregistros Minorista</strong>, usá <strong>Crear nueva venta</strong> o{' '}
+                  <strong>Escaneo por QR</strong> para iniciar el día; después podrás registrar pedidos.
+                </>
+              ) : (
+                <>
+                  Finalizaste la venta desde Nueva venta. Un administrador debe habilitar &quot;Pedidos (solo esta
+                  fecha)&quot; para tu usuario en{' '}
+                  <strong>Control de usuarios mayoristas y minoristas</strong> (menú Control de ventas). Esa
+                  habilitación aplica únicamente al día indicado.
+                </>
+              )}
             </AlertDescription>
           </Alert>
         )}

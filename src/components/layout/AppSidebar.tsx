@@ -46,7 +46,7 @@ const menuSections = [
       { title: 'Ventas a Crédito', url: '/creditos', icon: DollarSign, roles: ['admin', 'vendedor'] },
       { title: 'Escanear QR', url: '/escanear-qr', icon: QrCode, roles: ['minorista'] },
       { title: 'Mis Pedidos', url: '/pedidos', icon: Package, roles: ['minorista', 'mayorista'] },
-      { title: 'Mis Arqueos', url: '/arqueos/minorista', icon: Wallet, roles: ['minorista'] },
+      { title: 'Ventas del día', url: '/arqueos/minorista', icon: Wallet, roles: ['minorista'] },
       { title: 'Mis Arqueos', url: '/arqueos/mayorista', icon: Wallet, roles: ['mayorista'] },
     ],
   },

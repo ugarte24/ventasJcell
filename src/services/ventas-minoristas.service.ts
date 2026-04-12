@@ -230,6 +230,24 @@ export const ventasMinoristasService = {
   },
 
   /**
+   * Fecha local (YYYY-MM-DD) de la última finalización desde Nueva venta, o null si no hay ninguna.
+   */
+  async getUltimaFechaVentaDesdeNuevaVenta(idMinorista: string): Promise<string | null> {
+    const { data, error } = await supabase
+      .from('ventas_minoristas')
+      .select('fecha')
+      .eq('id_minorista', idMinorista)
+      .ilike('observaciones', '%Venta registrada desde preregistros%')
+      .order('fecha', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw new Error(handleSupabaseError(error));
+    return data?.fecha ?? null;
+  },
+
+  /**
    * Obtener aumentos del día para un minorista
    */
   async getAumentosDelDia(idMinorista: string, fecha?: string): Promise<VentaMinorista[]> {

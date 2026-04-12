@@ -1,226 +1,105 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from '@/components/ui/table';
+import { Calendar } from '@/components/ui/calendar';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Textarea } from '@/components/ui/textarea';
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Wallet,
-  Plus, 
-  X,
-  Loader,
-  AlertCircle,
-  CheckCircle,
-  Clock,
-  DollarSign,
-  TrendingUp,
-  TrendingDown,
-  Package
-} from 'lucide-react';
+import { CalendarDays, Clock, DollarSign, Package, RefreshCw, Receipt } from 'lucide-react';
 import { useAuth } from '@/contexts';
-import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { arqueosMinoristasService } from '@/services/arqueos-minoristas.service';
 import { ventasMinoristasService } from '@/services/ventas-minoristas.service';
-import { getLocalDateISO, getLocalTimeISO } from '@/lib/utils';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { productsService } from '@/services/products.service';
-import { Product } from '@/types';
+import { getLocalDateISO } from '@/lib/utils';
+import { useQuery } from '@tanstack/react-query';
+import { VentaMinorista } from '@/types';
+import { cn } from '@/lib/utils';
 
-// Esquemas de validación
-const cerrarArqueoSchema = z.object({
-  efectivoRecibido: z.number().min(0, 'El efectivo recibido debe ser mayor o igual a 0'),
-  observaciones: z.string().optional(),
-});
+function lineaSubtotal(v: VentaMinorista) {
+  return v.cantidad_vendida * v.precio_unitario;
+}
 
-type CerrarArqueoForm = z.infer<typeof cerrarArqueoSchema>;
+/** Intenta obtener id de venta desde observaciones tipo "… Venta #uuid" */
+function referenciaVenta(observaciones?: string | null): string | null {
+  if (!observaciones) return null;
+  const m = observaciones.match(/Venta\s*#([0-9a-f-]{36})/i);
+  return m ? m[1] : null;
+}
+
+function parseFechaLocalISO(iso: string): Date {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function fechaLocalToISO(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 export default function ArqueosMinoristas() {
   const { user } = useAuth();
-  const queryClient = useQueryClient();
-  const [showCerrarDialog, setShowCerrarDialog] = useState(false);
-  const [arqueoSeleccionado, setArqueoSeleccionado] = useState<string | null>(null);
-  const [productos, setProductos] = useState<Product[]>([]);
+  const fechaHoy = getLocalDateISO();
+  const [fechaConsulta, setFechaConsulta] = useState(() => getLocalDateISO());
+  const esHoy = fechaConsulta === fechaHoy;
 
-  const cerrarForm = useForm<CerrarArqueoForm>({
-    resolver: zodResolver(cerrarArqueoSchema),
-    defaultValues: {
-      efectivoRecibido: 0,
-      observaciones: '',
-    },
-  });
+  const fechaSeleccionadaDate = useMemo(() => parseFechaLocalISO(fechaConsulta), [fechaConsulta]);
+  const [calendarMonth, setCalendarMonth] = useState(() => parseFechaLocalISO(fechaConsulta));
 
-  // Cargar productos
   useEffect(() => {
-    const loadProductos = async () => {
-      try {
-        const prods = await productsService.getAll();
-        setProductos(prods);
-      } catch (error) {
-        console.error('Error al cargar productos:', error);
-      }
-    };
-    loadProductos();
-  }, []);
+    setCalendarMonth(parseFechaLocalISO(fechaConsulta));
+  }, [fechaConsulta]);
 
-  // Obtener arqueo abierto del día
-  const { data: arqueoAbierto, isLoading: loadingArqueoAbierto } = useQuery({
-    queryKey: ['arqueo-minorista-abierto', user?.id],
-    queryFn: async () => {
-      if (!user || user.rol !== 'minorista') return null;
-      return await arqueosMinoristasService.getArqueoAbiertoDelDia(user.id);
+  const handleCalendarSelect = useCallback(
+    (d: Date | undefined) => {
+      if (!d) return;
+      const picked = fechaLocalToISO(d);
+      if (picked > fechaHoy) return;
+      setFechaConsulta(picked);
     },
-    enabled: !!user && user.rol === 'minorista',
-  });
+    [fechaHoy]
+  );
 
-  // Obtener ventas del día
-  const { data: ventasDelDia = [], isLoading: loadingVentas } = useQuery({
-    queryKey: ['ventas-minorista-dia', user?.id, getLocalDateISO()],
+  const {
+    data: ventasDelDia = [],
+    isLoading: loadingVentas,
+    refetch: refetchVentas,
+    isFetching: fetchingVentas,
+  } = useQuery({
+    queryKey: ['ventas-minorista-dia', user?.id, fechaConsulta],
     queryFn: async () => {
       if (!user || user.rol !== 'minorista') return [];
-      return await ventasMinoristasService.getVentasDelDia(user.id);
+      return await ventasMinoristasService.getVentasDelDia(user.id, fechaConsulta);
     },
     enabled: !!user && user.rol === 'minorista',
   });
 
-  // Calcular total de ventas del día
-  const totalVentasDelDia = useMemo(() => {
-    return ventasDelDia.reduce((sum, venta) => sum + (venta.cantidad_vendida * venta.precio_unitario), 0);
+  const ventasOrdenadas = useMemo(() => {
+    return [...ventasDelDia].sort((a, b) => {
+      const ta = (a.hora || '').localeCompare(b.hora || '');
+      return ta;
+    });
   }, [ventasDelDia]);
 
-  // Obtener historial de arqueos
-  const { data: arqueos = [], isLoading: loadingArqueos } = useQuery({
-    queryKey: ['arqueos-minorista', user?.id],
-    queryFn: async () => {
-      if (!user || user.rol !== 'minorista') return [];
-      return await arqueosMinoristasService.getAll({ id_minorista: user.id });
-    },
-    enabled: !!user && user.rol === 'minorista',
-  });
+  const totalVentasDelDia = useMemo(() => {
+    return ventasDelDia.reduce((sum, venta) => sum + lineaSubtotal(venta), 0);
+  }, [ventasDelDia]);
 
-  // Crear arqueo
-  const createArqueoMutation = useMutation({
-    mutationFn: async () => {
-      if (!user || user.rol !== 'minorista') throw new Error('No autorizado');
-      
-      const fecha = getLocalDateISO();
-      const hora = getLocalTimeISO();
-      
-      // Calcular saldos restantes desde las ventas del día
-      // Agrupar por producto y calcular cantidad restante
-      const saldosRestantes: Array<{ id_producto: string; cantidad_restante: number }> = [];
-      const ventasPorProducto = new Map<string, { vendida: number; aumento: number; cantidadInicial: number }>();
-      
-      // Obtener preregistros para saber la cantidad inicial
-      const { preregistrosService } = await import('@/services/preregistros.service');
-      const preregistros = await preregistrosService.getPreregistrosMinorista(user.id);
-      
-      preregistros.forEach(preregistro => {
-        ventasPorProducto.set(preregistro.id_producto, {
-          vendida: 0,
-          aumento: 0,
-          cantidadInicial: preregistro.cantidad,
-        });
-      });
-      
-      // Sumar ventas y aumentos del día
-      ventasDelDia.forEach(venta => {
-        const actual = ventasPorProducto.get(venta.id_producto) || { vendida: 0, aumento: 0, cantidadInicial: 0 };
-        ventasPorProducto.set(venta.id_producto, {
-          vendida: actual.vendida + venta.cantidad_vendida,
-          aumento: actual.aumento + venta.cantidad_aumento,
-          cantidadInicial: actual.cantidadInicial,
-        });
-      });
-      
-      // Calcular saldos restantes
-      ventasPorProducto.forEach((data, idProducto) => {
-        const cantidadRestante = data.cantidadInicial + data.aumento - data.vendida;
-        if (cantidadRestante > 0) {
-          saldosRestantes.push({ id_producto: idProducto, cantidad_restante: cantidadRestante });
-        }
-      });
-      
-      return await arqueosMinoristasService.create({
-        id_minorista: user.id,
-        fecha: fecha,
-        hora_apertura: hora,
-        ventas_del_periodo: totalVentasDelDia,
-        saldos_restantes: saldosRestantes,
-        efectivo_recibido: 0,
-        estado: 'abierto',
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['arqueo-minorista-abierto'] });
-      queryClient.invalidateQueries({ queryKey: ['arqueos-minorista'] });
-      toast.success('Arqueo creado exitosamente');
-    },
-    onError: (error: any) => {
-      toast.error(error.message || 'Error al crear arqueo');
-    },
-  });
+  const lineasSoloVenta = useMemo(
+    () => ventasDelDia.filter((v) => v.cantidad_vendida > 0).length,
+    [ventasDelDia]
+  );
 
-  // Cerrar arqueo
-  const cerrarArqueoMutation = useMutation({
-    mutationFn: async (data: CerrarArqueoForm) => {
-      if (!arqueoSeleccionado) throw new Error('No hay arqueo seleccionado');
-      return await arqueosMinoristasService.cerrar(arqueoSeleccionado, data.efectivoRecibido);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['arqueo-minorista-abierto'] });
-      queryClient.invalidateQueries({ queryKey: ['arqueos-minorista'] });
-      setShowCerrarDialog(false);
-      setArqueoSeleccionado(null);
-      cerrarForm.reset();
-      toast.success('Arqueo cerrado exitosamente');
-    },
-    onError: (error: any) => {
-      toast.error(error.message || 'Error al cerrar arqueo');
-    },
-  });
-
-  const handleCerrarArqueo = (arqueoId: string) => {
-    setArqueoSeleccionado(arqueoId);
-    const arqueo = arqueos.find(a => a.id === arqueoId);
-    if (arqueo) {
-      cerrarForm.reset({
-        efectivoRecibido: arqueo.ventas_del_periodo,
-        observaciones: '',
-      });
-    }
-    setShowCerrarDialog(true);
-  };
-
-  const onSubmitCerrar = (data: CerrarArqueoForm) => {
-    cerrarArqueoMutation.mutate(data);
-  };
-
-  // Verificar autorización
   if (!user || user.rol !== 'minorista') {
     return (
-      <DashboardLayout>
+      <DashboardLayout title="Ventas del día">
         <div className="flex items-center justify-center h-96">
           <p className="text-muted-foreground">Solo minoristas pueden acceder a esta página</p>
         </div>
@@ -228,263 +107,169 @@ export default function ArqueosMinoristas() {
     );
   }
 
-  const diferencia = arqueoAbierto 
-    ? (cerrarForm.watch('efectivoRecibido') || 0) - arqueoAbierto.ventas_del_periodo
-    : 0;
-
   return (
-    <DashboardLayout>
+    <DashboardLayout title="Ventas del día">
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold">Arqueos Diarios</h1>
+        <div className="flex flex-col gap-2">
+          <h1 className="text-3xl font-bold font-display tracking-tight">Ventas del día</h1>
+          <p className="text-muted-foreground">
+            Consultá movimientos por fecha con el calendario. Se registran al finalizar en{' '}
+            <strong>Nueva venta</strong> o por aumentos de pedidos.
+          </p>
         </div>
 
-        {/* Arqueo Abierto del Día */}
-        {loadingArqueoAbierto ? (
-          <Skeleton className="h-64" />
-        ) : arqueoAbierto ? (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <Wallet className="h-5 w-5" />
-                  Arqueo del Día - {arqueoAbierto.fecha}
-                </CardTitle>
-                <Badge variant={arqueoAbierto.estado === 'abierto' ? 'default' : 'secondary'}>
-                  {arqueoAbierto.estado === 'abierto' ? 'Abierto' : 'Cerrado'}
-                </Badge>
-              </div>
+        <div className="flex flex-col xl:flex-row gap-6 xl:items-start">
+          <Card className="shrink-0 w-full max-w-[340px] mx-auto xl:mx-0 xl:sticky xl:top-4 animate-fade-in">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-display flex items-center gap-2">
+                <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                Calendario
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Tocá un día para ver sus movimientos. No podés elegir fechas futuras.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 rounded-lg bg-muted">
-                  <div className="flex items-center gap-2 mb-2">
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium text-muted-foreground">Ventas del Día</span>
-                  </div>
-                  <p className="text-2xl font-bold">Bs. {arqueoAbierto.ventas_del_periodo.toFixed(2)}</p>
-                </div>
-                <div className="p-4 rounded-lg bg-muted">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Clock className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium text-muted-foreground">Hora Apertura</span>
-                  </div>
-                  <p className="text-2xl font-bold">{arqueoAbierto.hora_apertura || 'N/A'}</p>
-                </div>
-                {arqueoAbierto.estado === 'cerrado' && (
-                  <div className="p-4 rounded-lg bg-muted">
-                    <div className="flex items-center gap-2 mb-2">
-                      <CheckCircle className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium text-muted-foreground">Hora Cierre</span>
-                    </div>
-                    <p className="text-2xl font-bold">{arqueoAbierto.hora_cierre || 'N/A'}</p>
-                  </div>
-                )}
+            <CardContent className="flex flex-col items-center pt-0 pb-4">
+              <Calendar
+                mode="single"
+                month={calendarMonth}
+                onMonthChange={setCalendarMonth}
+                selected={fechaSeleccionadaDate}
+                onSelect={handleCalendarSelect}
+                disabled={(date) => fechaLocalToISO(date) > fechaHoy}
+                className="rounded-md border"
+              />
+              <div className="flex flex-wrap gap-2 justify-center w-full mt-4 px-1">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={esHoy}
+                  onClick={() => setFechaConsulta(fechaHoy)}
+                >
+                  Ir a hoy
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => refetchVentas()}
+                  disabled={fetchingVentas}
+                >
+                  <RefreshCw className={cn('h-4 w-4', fetchingVentas && 'animate-spin')} />
+                  Actualizar
+                </Button>
               </div>
+            </CardContent>
+          </Card>
 
-              {arqueoAbierto.saldos_restantes.length > 0 && (
-                <div>
-                  <h3 className="font-semibold mb-2">Saldos Restantes</h3>
-                  <div className="space-y-2">
-                    {arqueoAbierto.saldos_restantes.map((saldo, index) => {
-                      const producto = productos.find(p => p.id === saldo.id_producto);
+          <div className="flex-1 min-w-0 space-y-6">
+        <Card className="animate-fade-in">
+          <CardHeader className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2 font-display text-lg">
+                <Receipt className="h-5 w-5" />
+                Detalle {esHoy ? 'de hoy' : `del ${fechaConsulta}`}
+              </CardTitle>
+              <CardDescription>
+                Fecha seleccionada: <span className="font-medium text-foreground">{fechaConsulta}</span>
+                {esHoy ? ' (hoy)' : ''}. Cada fila es un registro (venta o aumento).
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-4 rounded-lg bg-muted/80 border border-border/60">
+                <div className="flex items-center gap-2 mb-1 text-sm text-muted-foreground">
+                  <DollarSign className="h-4 w-4" />
+                  Total vendido
+                </div>
+                <p className="text-2xl font-bold text-primary tabular-nums">
+                  {loadingVentas ? '…' : `Bs. ${totalVentasDelDia.toFixed(2)}`}
+                </p>
+              </div>
+              <div className="p-4 rounded-lg bg-muted/80 border border-border/60">
+                <div className="flex items-center gap-2 mb-1 text-sm text-muted-foreground">
+                  <Package className="h-4 w-4" />
+                  Líneas con venta
+                </div>
+                <p className="text-2xl font-bold tabular-nums">
+                  {loadingVentas ? '…' : lineasSoloVenta}
+                </p>
+              </div>
+              <div className="p-4 rounded-lg bg-muted/80 border border-border/60">
+                <div className="flex items-center gap-2 mb-1 text-sm text-muted-foreground">
+                  <Clock className="h-4 w-4" />
+                  Registros totales
+                </div>
+                <p className="text-2xl font-bold tabular-nums">
+                  {loadingVentas ? '…' : ventasDelDia.length}
+                </p>
+              </div>
+            </div>
+
+            {loadingVentas ? (
+              <Skeleton className="h-48 w-full" />
+            ) : ventasOrdenadas.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground rounded-lg border border-dashed">
+                No hay movimientos en esta fecha. Las ventas finalizadas en <strong>Nueva venta</strong> quedan
+                registradas por día.
+              </div>
+            ) : (
+              <div className="rounded-lg border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="whitespace-nowrap">Hora</TableHead>
+                      <TableHead>Producto</TableHead>
+                      <TableHead className="text-right">Vendida</TableHead>
+                      <TableHead className="text-right">Aumento</TableHead>
+                      <TableHead className="text-right">P. unit.</TableHead>
+                      <TableHead className="text-right">Importe venta</TableHead>
+                      <TableHead className="hidden md:table-cell">Referencia</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {ventasOrdenadas.map((v) => {
+                      const refVenta = referenciaVenta(v.observaciones);
+                      const importeVenta = lineaSubtotal(v);
                       return (
-                        <div key={index} className="flex items-center justify-between p-2 bg-muted rounded">
-                          <span className="text-sm">{producto?.nombre || 'Producto desconocido'}</span>
-                          <Badge variant="outline">{saldo.cantidad_restante}</Badge>
-                        </div>
+                        <TableRow key={v.id}>
+                          <TableCell className="whitespace-nowrap text-muted-foreground tabular-nums">
+                            {v.hora?.slice(0, 8) || '—'}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {v.producto?.nombre || 'Producto'}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">{v.cantidad_vendida}</TableCell>
+                          <TableCell className="text-right tabular-nums">{v.cantidad_aumento}</TableCell>
+                          <TableCell className="text-right tabular-nums">Bs. {v.precio_unitario.toFixed(2)}</TableCell>
+                          <TableCell className="text-right font-semibold tabular-nums">
+                            Bs. {importeVenta.toFixed(2)}
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell max-w-[200px]">
+                            {refVenta ? (
+                              <Badge variant="secondary" className="font-mono text-xs truncate max-w-full">
+                                Venta …{refVenta.slice(-8)}
+                              </Badge>
+                            ) : v.id_pedido ? (
+                              <Badge variant="outline">Pedido</Badge>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">—</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
                       );
                     })}
-                  </div>
-                </div>
-              )}
-
-              {arqueoAbierto.estado === 'abierto' && (
-                <Button
-                  onClick={() => handleCerrarArqueo(arqueoAbierto.id)}
-                  className="w-full"
-                >
-                  Cerrar Arqueo
-                </Button>
-              )}
-
-              {arqueoAbierto.estado === 'cerrado' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-4 rounded-lg bg-muted">
-                    <div className="flex items-center gap-2 mb-2">
-                      <DollarSign className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium text-muted-foreground">Efectivo Recibido</span>
-                    </div>
-                    <p className="text-2xl font-bold">Bs. {arqueoAbierto.efectivo_recibido.toFixed(2)}</p>
-                  </div>
-                  <div className={`p-4 rounded-lg ${arqueoAbierto.diferencia >= 0 ? 'bg-green-50 dark:bg-green-950' : 'bg-red-50 dark:bg-red-950'}`}>
-                    <div className="flex items-center gap-2 mb-2">
-                      {arqueoAbierto.diferencia >= 0 ? (
-                        <TrendingUp className="h-4 w-4 text-green-600" />
-                      ) : (
-                        <TrendingDown className="h-4 w-4 text-red-600" />
-                      )}
-                      <span className="text-sm font-medium">Diferencia</span>
-                    </div>
-                    <p className={`text-2xl font-bold ${arqueoAbierto.diferencia >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {arqueoAbierto.diferencia >= 0 ? '+' : ''}Bs. {arqueoAbierto.diferencia.toFixed(2)}
-                    </p>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>No hay arqueo abierto</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Button
-                onClick={() => createArqueoMutation.mutate()}
-                disabled={createArqueoMutation.isPending}
-                className="w-full"
-              >
-                {createArqueoMutation.isPending ? (
-                  <>
-                    <Loader className="mr-2 h-4 w-4 animate-spin" />
-                    Creando...
-                  </>
-                ) : (
-                  <>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Crear Arqueo del Día
-                  </>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Historial de Arqueos */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Historial de Arqueos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loadingArqueos ? (
-              <Skeleton className="h-64" />
-            ) : arqueos.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">No hay arqueos registrados</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Ventas</TableHead>
-                    <TableHead>Efectivo Recibido</TableHead>
-                    <TableHead>Diferencia</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {arqueos.map((arqueo) => (
-                    <TableRow key={arqueo.id}>
-                      <TableCell>{arqueo.fecha}</TableCell>
-                      <TableCell>Bs. {arqueo.ventas_del_periodo.toFixed(2)}</TableCell>
-                      <TableCell>
-                        {arqueo.estado === 'cerrado' ? `Bs. ${arqueo.efectivo_recibido.toFixed(2)}` : '-'}
-                      </TableCell>
-                      <TableCell>
-                        {arqueo.estado === 'cerrado' ? (
-                          <span className={arqueo.diferencia >= 0 ? 'text-green-600' : 'text-red-600'}>
-                            {arqueo.diferencia >= 0 ? '+' : ''}Bs. {arqueo.diferencia.toFixed(2)}
-                          </span>
-                        ) : (
-                          '-'
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={arqueo.estado === 'abierto' ? 'default' : 'secondary'}>
-                          {arqueo.estado === 'abierto' ? 'Abierto' : 'Cerrado'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {arqueo.estado === 'abierto' && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleCerrarArqueo(arqueo.id)}
-                          >
-                            Cerrar
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
-
-        {/* Dialog para cerrar arqueo */}
-        <Dialog open={showCerrarDialog} onOpenChange={setShowCerrarDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Cerrar Arqueo</DialogTitle>
-              <DialogDescription>
-                Ingresa el efectivo recibido para cerrar el arqueo del día.
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={cerrarForm.handleSubmit(onSubmitCerrar)} className="space-y-4">
-              <div>
-                <Label htmlFor="efectivoRecibido">Efectivo Recibido (Bs.)</Label>
-                <Input
-                  id="efectivoRecibido"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  {...cerrarForm.register('efectivoRecibido', { valueAsNumber: true })}
-                />
-                {cerrarForm.formState.errors.efectivoRecibido && (
-                  <p className="text-sm text-destructive mt-1">
-                    {cerrarForm.formState.errors.efectivoRecibido.message}
-                  </p>
-                )}
-              </div>
-              <div>
-                <Label htmlFor="observaciones">Observaciones (opcional)</Label>
-                <Textarea
-                  id="observaciones"
-                  {...cerrarForm.register('observaciones')}
-                  rows={3}
-                />
-              </div>
-              {arqueoAbierto && (
-                <div className="p-3 rounded-lg bg-muted">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Diferencia:</span>
-                    <span className={`font-bold text-lg ${diferencia >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {diferencia >= 0 ? '+' : ''}Bs. {Math.abs(diferencia).toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-              )}
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setShowCerrarDialog(false)}>
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={cerrarArqueoMutation.isPending}>
-                  {cerrarArqueoMutation.isPending ? (
-                    <>
-                      <Loader className="mr-2 h-4 w-4 animate-spin" />
-                      Cerrando...
-                    </>
-                  ) : (
-                    'Cerrar Arqueo'
-                  )}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+          </div>
+        </div>
       </div>
     </DashboardLayout>
   );

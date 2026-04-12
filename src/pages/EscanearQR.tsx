@@ -28,6 +28,7 @@ import { useAuth } from '@/contexts';
 import { toast } from 'sonner';
 import { transferenciasService } from '@/services/transferencias.service';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { getLocalDateISO } from '@/lib/utils';
 import { TransferenciaSaldo } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
@@ -72,6 +73,13 @@ export default function EscanearQR() {
       setShowConfirmDialog(true);
       queryClient.invalidateQueries({ queryKey: ['transferencias-saldos'] });
       queryClient.invalidateQueries({ queryKey: ['preregistros-minorista'] });
+      if (user) {
+        localStorage.setItem(
+          `ventasJcell_minorista_jornada_${user.id}_${getLocalDateISO()}`,
+          '1'
+        );
+        queryClient.invalidateQueries({ queryKey: ['pedidos-gate'] });
+      }
     },
     onError: (error: any) => {
       toast.error(error.message || 'Error al escanear el código QR');
