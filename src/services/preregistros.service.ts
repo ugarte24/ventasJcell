@@ -298,6 +298,45 @@ export const preregistrosService = {
     if (error) throw new Error(handleSupabaseError(error));
   },
 
+  /**
+   * Copia todos los productos del preregistro de un minorista a otro.
+   * Reutiliza createPreregistroMinorista (si el producto ya existe en destino, actualiza la cantidad).
+   * @param replaceDestination Si true, borra antes todas las filas del destino y luego copia (listado idéntico al origen).
+   */
+  async copyPreregistrosMinoristaFromTo(
+    idOrigen: string,
+    idDestino: string,
+    options?: { replaceDestination?: boolean }
+  ): Promise<number> {
+    if (idOrigen === idDestino) {
+      throw new Error('El minorista de origen y destino no puede ser el mismo.');
+    }
+    const origen = await this.getPreregistrosMinorista(idOrigen);
+    if (origen.length === 0) {
+      throw new Error('El minorista de origen no tiene productos en el preregistro.');
+    }
+    if (options?.replaceDestination) {
+      const { error: delErr } = await supabase
+        .from('preregistros_minorista')
+        .delete()
+        .eq('id_minorista', idDestino);
+      if (delErr) throw new Error(handleSupabaseError(delErr));
+    }
+    const sorted = [...origen].sort((a, b) => {
+      const oa = a.orden ?? 0;
+      const ob = b.orden ?? 0;
+      if (oa !== ob) return oa - ob;
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    });
+    for (const row of sorted) {
+      await this.createPreregistroMinorista(idDestino, row.id_producto, row.cantidad);
+    }
+    if (options?.replaceDestination) {
+      await this.normalizeOrdenMinorista(idDestino);
+    }
+    return sorted.length;
+  },
+
   // ============================================================================
   // PREREGISTROS MAYORISTA
   // ============================================================================

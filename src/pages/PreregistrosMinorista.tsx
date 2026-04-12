@@ -40,7 +40,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Plus, Trash2, Loader, Check, ChevronsUpDown, Edit, Package, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Trash2, Loader, Check, ChevronsUpDown, Edit, Package, ArrowUp, ArrowDown, Copy } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useProducts } from '@/hooks/useProducts';
 import { useUsers } from '@/hooks/useUsers';
 import { preregistrosService } from '@/services/preregistros.service';
@@ -74,11 +75,28 @@ export default function PreregistrosMinorista() {
   const [newProductSearchOpen, setNewProductSearchOpen] = useState(false);
   const [newProductSearchTerm, setNewProductSearchTerm] = useState('');
   const [isReordering, setIsReordering] = useState(false);
+  const [isCopyDialogOpen, setIsCopyDialogOpen] = useState(false);
+  const [copySourceMinoristaId, setCopySourceMinoristaId] = useState<string | null>(null);
+  const [copyTargetMinoristaId, setCopyTargetMinoristaId] = useState<string>('');
+  const [copyTargetSearchOpen, setCopyTargetSearchOpen] = useState(false);
+  const [copyTargetSearchTerm, setCopyTargetSearchTerm] = useState('');
+  const [copyReplaceDestination, setCopyReplaceDestination] = useState(false);
+  const [isCopying, setIsCopying] = useState(false);
 
   const minoristas = users.filter(u => u.rol === 'minorista' && u.estado === 'activo');
   const filteredMinoristas = minoristas.filter(m =>
     m.nombre.toLowerCase().includes(minoristaSearchTerm.toLowerCase()) ||
     m.usuario.toLowerCase().includes(minoristaSearchTerm.toLowerCase())
+  );
+
+  const minoristasDestinoCopy = useMemo(
+    () => minoristas.filter((m) => m.id !== copySourceMinoristaId),
+    [minoristas, copySourceMinoristaId]
+  );
+  const filteredMinoristasDestinoCopy = minoristasDestinoCopy.filter(
+    (m) =>
+      m.nombre.toLowerCase().includes(copyTargetSearchTerm.toLowerCase()) ||
+      m.usuario.toLowerCase().includes(copyTargetSearchTerm.toLowerCase())
   );
 
   // Productos filtrados para el diálogo de gestión (usa newProductSearchTerm)
@@ -193,6 +211,46 @@ export default function PreregistrosMinorista() {
       toast.error(error.message || 'Error al eliminar preregistro');
     } finally {
       setIsDeleting(null);
+    }
+  };
+
+  const openCopyDialog = (idMinoristaOrigen: string) => {
+    setCopySourceMinoristaId(idMinoristaOrigen);
+    setCopyTargetMinoristaId('');
+    setCopyTargetSearchTerm('');
+    setCopyReplaceDestination(false);
+    setIsCopyDialogOpen(true);
+  };
+
+  const handleExecuteCopy = async () => {
+    if (!copySourceMinoristaId || !copyTargetMinoristaId) {
+      toast.error('Seleccioná el minorista de destino');
+      return;
+    }
+    setIsCopying(true);
+    const idDestino = copyTargetMinoristaId;
+    try {
+      const n = await preregistrosService.copyPreregistrosMinoristaFromTo(
+        copySourceMinoristaId,
+        idDestino,
+        { replaceDestination: copyReplaceDestination }
+      );
+      toast.success(
+        copyReplaceDestination
+          ? `Se copiaron ${n} producto(s); el preregistro del destino quedó igual al del origen.`
+          : `Se copiaron o actualizaron ${n} producto(s) en el minorista destino.`
+      );
+      setIsCopyDialogOpen(false);
+      setCopySourceMinoristaId(null);
+      setCopyTargetMinoristaId('');
+      await loadPreregistros();
+      if (selectedMinoristaForManage === idDestino) {
+        await loadPreregistrosDelMinorista(idDestino);
+      }
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Error al copiar preregistro');
+    } finally {
+      setIsCopying(false);
     }
   };
 
@@ -360,14 +418,24 @@ export default function PreregistrosMinorista() {
                         {minorista.nombre}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={() => handleManageProducts(minorista.id)}
-                        >
-                          <Package className="h-4 w-4 mr-2" />
-                          Gestionar Productos
-                        </Button>
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => handleManageProducts(minorista.id)}
+                          >
+                            <Package className="h-4 w-4 mr-2" />
+                            Gestionar Productos
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openCopyDialog(minorista.id)}
+                          >
+                            <Copy className="h-4 w-4 mr-2" />
+                            Copiar a otro
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -449,6 +517,119 @@ export default function PreregistrosMinorista() {
               </Button>
               <Button onClick={handleCreate}>
                 Continuar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={isCopyDialogOpen}
+          onOpenChange={(open) => {
+            setIsCopyDialogOpen(open);
+            if (!open) setCopySourceMinoristaId(null);
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Copiar productos a otro minorista</DialogTitle>
+              <DialogDescription>
+                Se copiarán todos los productos y cantidades desde{' '}
+                <strong>
+                  {copySourceMinoristaId
+                    ? minoristas.find((m) => m.id === copySourceMinoristaId)?.nombre ?? '…'
+                    : '…'}
+                </strong>
+                . En el destino, si ya existía el mismo producto, se actualizará su cantidad con la del
+                origen.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label>Minorista destino *</Label>
+                <Popover open={copyTargetSearchOpen} onOpenChange={setCopyTargetSearchOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-between"
+                    >
+                      {copyTargetMinoristaId
+                        ? minoristas.find((m) => m.id === copyTargetMinoristaId)?.nombre ||
+                          'Seleccionar'
+                        : 'Seleccionar minorista'}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-[10002]" align="start">
+                    <Command>
+                      <CommandInput
+                        placeholder="Buscar minorista…"
+                        value={copyTargetSearchTerm}
+                        onValueChange={setCopyTargetSearchTerm}
+                      />
+                      <CommandList>
+                        <CommandEmpty>No hay otros minoristas activos.</CommandEmpty>
+                        <CommandGroup>
+                          {filteredMinoristasDestinoCopy.map((m) => (
+                            <CommandItem
+                              key={m.id}
+                              value={`${m.nombre} ${m.usuario} ${m.id}`}
+                              onSelect={() => {
+                                setCopyTargetMinoristaId(m.id);
+                                setCopyTargetSearchOpen(false);
+                                setCopyTargetSearchTerm('');
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  'mr-2 h-4 w-4',
+                                  copyTargetMinoristaId === m.id ? 'opacity-100' : 'opacity-0'
+                                )}
+                              />
+                              {m.nombre}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm">
+                <Checkbox
+                  checked={copyReplaceDestination}
+                  onCheckedChange={(v) => setCopyReplaceDestination(v === true)}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="font-medium">Reemplazar todo el preregistro del destino</span>
+                  <span className="mt-1 block text-muted-foreground">
+                    Borra primero todos los productos del minorista destino y luego copia solo los del
+                    origen (útil para un usuario nuevo que no deba conservar filas sueltas).
+                  </span>
+                </span>
+              </label>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsCopyDialogOpen(false);
+                  setCopySourceMinoristaId(null);
+                }}
+                disabled={isCopying}
+              >
+                Cancelar
+              </Button>
+              <Button onClick={() => void handleExecuteCopy()} disabled={isCopying || !copyTargetMinoristaId}>
+                {isCopying ? (
+                  <>
+                    <Loader className="mr-2 h-4 w-4 animate-spin" />
+                    Copiando…
+                  </>
+                ) : (
+                  'Copiar productos'
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>
