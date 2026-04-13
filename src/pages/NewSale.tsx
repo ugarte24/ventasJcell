@@ -706,16 +706,40 @@ export default function NewSale() {
     [lineasResumenVentasRegistradas]
   );
 
-  /** Tarjeta / Recarga / Chip según ventas registradas en `ventas_*` ese día (panel Resumen). */
-  const resumenTarjetaRecargaChip = useMemo(() => {
+  /** Filas con venta en curso según saldos de la tabla (subtotal > 0); aún no están en `ventas_*` hasta finalizar. */
+  const lineasResumenBorradorPreregistro = useMemo(() => {
+    if (user?.rol !== 'minorista' && user?.rol !== 'mayorista') return [];
+    return preregistroItems
+      .filter((i) => i.subtotal > 0)
+      .map((i) => ({
+        key: `borrador-${i.id}`,
+        nombre: i.nombre,
+        id_categoria: i.id_categoria,
+        cantidadVendida: Math.max(0, i.cantidad + i.aumento - i.cantidadRestante),
+        precioUnitario: i.precio_unitario,
+        subtotal: i.subtotal,
+      }));
+  }, [preregistroItems, user?.rol]);
+
+  const totalSubtotalBorradorPreregistro = useMemo(
+    () => lineasResumenBorradorPreregistro.reduce((s, x) => s + x.subtotal, 0),
+    [lineasResumenBorradorPreregistro]
+  );
+
+  const hayLineasEnResumenMinorMayor =
+    lineasResumenVentasRegistradas.length > 0 || lineasResumenBorradorPreregistro.length > 0;
+
+  /** Tarjeta / Recarga / Chip: ventas ya guardadas + borrador del preregistro. */
+  const resumenTarjetaRecargaChipCombinado = useMemo(() => {
     const acc = { tarjeta: 0, recarga: 0, chip: 0, otros: 0 };
-    lineasResumenVentasRegistradas.forEach((item) => {
-      const catNombre = item.id_categoria
-        ? categories.find((x) => x.id === item.id_categoria)?.nombre
+    const add = (id_categoria: string | undefined, nombre: string, subtotal: number) => {
+      const catNombre = id_categoria
+        ? categories.find((x) => x.id === id_categoria)?.nombre
         : undefined;
-      const bucket = bucketPreregistroItem(catNombre, item.nombre);
-      acc[bucket] += item.subtotal;
-    });
+      acc[bucketPreregistroItem(catNombre, nombre)] += subtotal;
+    };
+    lineasResumenVentasRegistradas.forEach((i) => add(i.id_categoria, i.nombre, i.subtotal));
+    lineasResumenBorradorPreregistro.forEach((i) => add(i.id_categoria, i.nombre, i.subtotal));
     const rows: { key: string; nombre: string; total: number }[] = [
       { key: 'tarjeta', nombre: 'Tarjeta', total: acc.tarjeta },
       { key: 'recarga', nombre: 'Recarga', total: acc.recarga },
@@ -725,10 +749,13 @@ export default function NewSale() {
       rows.push({ key: 'otros', nombre: 'Otros', total: acc.otros });
     }
     return rows;
-  }, [lineasResumenVentasRegistradas, categories]);
+  }, [lineasResumenVentasRegistradas, lineasResumenBorradorPreregistro, categories]);
+
+  const totalResumenVentasYBorrador =
+    resumenTotalVentasRegistradasDia + totalSubtotalBorradorPreregistro;
 
   /** Alias del resumen preregistro (antes `resumenPorCategoria`). Evita ReferenceError si queda código o caché de HMR con el nombre antiguo. */
-  const resumenPorCategoria = resumenTarjetaRecargaChip;
+  const resumenPorCategoria = resumenTarjetaRecargaChipCombinado;
 
   const filteredProducts = useMemo(() => {
     if (searchTerm.length > 0 && searchResults.length > 0) {
@@ -1995,32 +2022,73 @@ export default function NewSale() {
                         <Loader className="h-10 w-10 animate-spin text-muted-foreground" />
                         <p className="mt-4 text-sm text-muted-foreground">Cargando ventas del día…</p>
                       </div>
-                    ) : lineasResumenVentasRegistradas.length > 0 ? (
+                    ) : hayLineasEnResumenMinorMayor ? (
                       <>
                         <div className="max-h-[300px] overflow-y-auto overscroll-contain">
-                          <div className="divide-y">
-                            {lineasResumenVentasRegistradas.map((item) => (
-                              <div key={item.key} className="px-3 py-2.5 sm:px-4 sm:py-3">
-                                <p className="font-medium text-foreground leading-snug truncate">
-                                  {item.nombre}
-                                </p>
-                                <p className="mt-0.5 text-sm tabular-nums text-muted-foreground">
-                                  <span>
-                                    {item.cantidadVendida} × Bs. {item.precioUnitario.toFixed(2)} c/u
-                                  </span>
-                                  <span className="mx-1.5 opacity-60">·</span>
-                                  <span className="font-semibold text-foreground">
-                                    Bs. {item.subtotal.toFixed(2)}
-                                  </span>
-                                </p>
-                              </div>
-                            ))}
+                          <div>
+                            {lineasResumenVentasRegistradas.length > 0 && (
+                              <>
+                                <div className="border-b border-border bg-muted/40 px-2 py-1 sm:px-3">
+                                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                    Ventas guardadas (finalizadas)
+                                  </p>
+                                </div>
+                                {lineasResumenVentasRegistradas.map((item) => (
+                                  <div
+                                    key={item.key}
+                                    className="border-b border-border flex min-w-0 items-center justify-between gap-2 px-2 py-1.5 sm:px-3 sm:py-2"
+                                  >
+                                    <span className="min-w-0 truncate text-sm font-medium leading-tight text-foreground">
+                                      {item.nombre}
+                                    </span>
+                                    <span className="shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-muted-foreground">
+                                      {item.cantidadVendida}×Bs.{item.precioUnitario.toFixed(2)}
+                                      <span className="mx-1 opacity-50">·</span>
+                                      <span className="font-semibold text-foreground">
+                                        Bs.{item.subtotal.toFixed(2)}
+                                      </span>
+                                    </span>
+                                  </div>
+                                ))}
+                              </>
+                            )}
+                            {lineasResumenBorradorPreregistro.length > 0 && (
+                              <>
+                                <div
+                                  className={cn(
+                                    'border-b border-border bg-muted/40 px-2 py-1 sm:px-3',
+                                    lineasResumenVentasRegistradas.length > 0 && 'border-t border-border'
+                                  )}
+                                >
+                                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground leading-tight">
+                                    Venta en curso (pendiente de finalizar)
+                                  </p>
+                                </div>
+                                {lineasResumenBorradorPreregistro.map((item) => (
+                                  <div
+                                    key={item.key}
+                                    className="border-b border-border flex min-w-0 items-center justify-between gap-2 px-2 py-1.5 sm:px-3 sm:py-2"
+                                  >
+                                    <span className="min-w-0 truncate text-sm font-medium leading-tight text-foreground">
+                                      {item.nombre}
+                                    </span>
+                                    <span className="shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-muted-foreground">
+                                      {item.cantidadVendida}×Bs.{item.precioUnitario.toFixed(2)}
+                                      <span className="mx-1 opacity-50">·</span>
+                                      <span className="font-semibold text-foreground">
+                                        Bs.{item.subtotal.toFixed(2)}
+                                      </span>
+                                    </span>
+                                  </div>
+                                ))}
+                              </>
+                            )}
                           </div>
                         </div>
                         {/* Tarjeta / Recarga / Chip */}
                         <div className="border-t p-3 sm:p-4 space-y-2">
                           <p className="text-sm font-semibold mb-3">Tarjeta, Recarga y Chip:</p>
-                          {resumenTarjetaRecargaChip.map((row) => (
+                          {resumenTarjetaRecargaChipCombinado.map((row) => (
                             <div key={row.key} className="flex justify-between items-center text-sm">
                               <span className="text-muted-foreground">{row.nombre}:</span>
                               <span className="font-medium">Bs. {row.total.toFixed(2)}</span>
@@ -2029,7 +2097,7 @@ export default function NewSale() {
                           <div className="flex justify-between items-center pt-2 mt-2 border-t">
                             <p className="text-sm font-semibold">Total General:</p>
                             <p className="text-xl font-bold text-primary">
-                              Bs. {resumenTotalVentasRegistradasDia.toFixed(2)}
+                              Bs. {totalResumenVentasYBorrador.toFixed(2)}
                             </p>
                           </div>
                         </div>
@@ -2037,10 +2105,11 @@ export default function NewSale() {
                     ) : (
                       <div className="flex flex-col items-center justify-center py-12 text-center px-4">
                         <ClipboardList className="h-12 w-12 text-muted-foreground/50" />
-                        <p className="mt-4 text-muted-foreground">No hay ventas registradas para esta fecha</p>
-                        {user?.rol === 'minorista' && (
-                          <p className="mt-2 text-sm text-muted-foreground">
-                            El resumen solo muestra ventas ya guardadas en esta fecha (al finalizar en Nueva venta).
+                        <p className="mt-4 text-muted-foreground">No hay ventas ni saldos vendidos para esta fecha</p>
+                        {(user?.rol === 'minorista' || user?.rol === 'mayorista') && (
+                          <p className="mt-2 text-sm text-muted-foreground max-w-sm">
+                            Las ventas finalizadas aparecen al cerrar el día en Nueva venta. Si editaste saldos en la
+                            tabla, verás aquí la venta en curso cuando el subtotal sea mayor a cero.
                           </p>
                         )}
                       </div>
@@ -2803,32 +2872,73 @@ export default function NewSale() {
                         <Loader className="h-10 w-10 animate-spin text-muted-foreground" />
                         <p className="mt-4 text-sm text-muted-foreground">Cargando ventas del día…</p>
                       </div>
-                    ) : lineasResumenVentasRegistradas.length > 0 ? (
+                    ) : hayLineasEnResumenMinorMayor ? (
                       <>
                         <div className="overflow-y-auto overscroll-contain">
-                          <div className="divide-y">
-                            {lineasResumenVentasRegistradas.map((item) => (
-                              <div key={item.key} className="px-3 py-2.5 sm:px-4 sm:py-3">
-                                <p className="font-medium text-foreground leading-snug truncate">
-                                  {item.nombre}
-                                </p>
-                                <p className="mt-0.5 text-sm tabular-nums text-muted-foreground">
-                                  <span>
-                                    {item.cantidadVendida} × Bs. {item.precioUnitario.toFixed(2)} c/u
-                                  </span>
-                                  <span className="mx-1.5 opacity-60">·</span>
-                                  <span className="font-semibold text-foreground">
-                                    Bs. {item.subtotal.toFixed(2)}
-                                  </span>
-                                </p>
-                              </div>
-                            ))}
+                          <div>
+                            {lineasResumenVentasRegistradas.length > 0 && (
+                              <>
+                                <div className="border-b border-border bg-muted/40 px-2 py-1 sm:px-3">
+                                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                    Ventas guardadas (finalizadas)
+                                  </p>
+                                </div>
+                                {lineasResumenVentasRegistradas.map((item) => (
+                                  <div
+                                    key={item.key}
+                                    className="border-b border-border flex min-w-0 items-center justify-between gap-2 px-2 py-1.5 sm:px-3 sm:py-2"
+                                  >
+                                    <span className="min-w-0 truncate text-sm font-medium leading-tight text-foreground">
+                                      {item.nombre}
+                                    </span>
+                                    <span className="shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-muted-foreground">
+                                      {item.cantidadVendida}×Bs.{item.precioUnitario.toFixed(2)}
+                                      <span className="mx-1 opacity-50">·</span>
+                                      <span className="font-semibold text-foreground">
+                                        Bs.{item.subtotal.toFixed(2)}
+                                      </span>
+                                    </span>
+                                  </div>
+                                ))}
+                              </>
+                            )}
+                            {lineasResumenBorradorPreregistro.length > 0 && (
+                              <>
+                                <div
+                                  className={cn(
+                                    'border-b border-border bg-muted/40 px-2 py-1 sm:px-3',
+                                    lineasResumenVentasRegistradas.length > 0 && 'border-t border-border'
+                                  )}
+                                >
+                                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground leading-tight">
+                                    Venta en curso (pendiente de finalizar)
+                                  </p>
+                                </div>
+                                {lineasResumenBorradorPreregistro.map((item) => (
+                                  <div
+                                    key={item.key}
+                                    className="border-b border-border flex min-w-0 items-center justify-between gap-2 px-2 py-1.5 sm:px-3 sm:py-2"
+                                  >
+                                    <span className="min-w-0 truncate text-sm font-medium leading-tight text-foreground">
+                                      {item.nombre}
+                                    </span>
+                                    <span className="shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-muted-foreground">
+                                      {item.cantidadVendida}×Bs.{item.precioUnitario.toFixed(2)}
+                                      <span className="mx-1 opacity-50">·</span>
+                                      <span className="font-semibold text-foreground">
+                                        Bs.{item.subtotal.toFixed(2)}
+                                      </span>
+                                    </span>
+                                  </div>
+                                ))}
+                              </>
+                            )}
                           </div>
                         </div>
                         {/* Tarjeta / Recarga / Chip */}
                         <div className="border-t p-3 sm:p-4 space-y-2">
                           <p className="text-sm font-semibold mb-3">Tarjeta, Recarga y Chip:</p>
-                          {resumenTarjetaRecargaChip.map((row) => (
+                          {resumenTarjetaRecargaChipCombinado.map((row) => (
                             <div key={row.key} className="flex justify-between items-center text-sm">
                               <span className="text-muted-foreground">{row.nombre}:</span>
                               <span className="font-medium">Bs. {row.total.toFixed(2)}</span>
@@ -2837,7 +2947,7 @@ export default function NewSale() {
                           <div className="flex justify-between items-center pt-2 mt-2 border-t">
                             <p className="text-sm font-semibold">Total General:</p>
                             <p className="text-xl font-bold text-primary">
-                              Bs. {resumenTotalVentasRegistradasDia.toFixed(2)}
+                              Bs. {totalResumenVentasYBorrador.toFixed(2)}
                             </p>
                           </div>
                         </div>
@@ -2845,10 +2955,11 @@ export default function NewSale() {
                     ) : (
                       <div className="flex flex-col items-center justify-center py-12 text-center px-4">
                         <ClipboardList className="h-16 w-16 text-muted-foreground/50" />
-                        <p className="mt-4 text-muted-foreground">No hay ventas registradas para esta fecha</p>
-                        {user?.rol === 'minorista' && (
-                          <p className="mt-2 text-sm text-muted-foreground">
-                            El resumen solo muestra ventas ya guardadas en esta fecha (al finalizar en Nueva venta).
+                        <p className="mt-4 text-muted-foreground">No hay ventas ni saldos vendidos para esta fecha</p>
+                        {(user?.rol === 'minorista' || user?.rol === 'mayorista') && (
+                          <p className="mt-2 text-sm text-muted-foreground max-w-sm">
+                            Las ventas finalizadas aparecen al cerrar el día en Nueva venta. Si editaste saldos en la
+                            tabla, verás aquí la venta en curso cuando el subtotal sea mayor a cero.
                           </p>
                         )}
                       </div>
@@ -3177,11 +3288,11 @@ export default function NewSale() {
                       <span className="text-sm text-muted-foreground">Cargando ventas…</span>
                     </div>
                   ) : (user?.rol === 'minorista' || user?.rol === 'mayorista') &&
-                  lineasResumenVentasRegistradas.length > 0 ? (
+                  hayLineasEnResumenMinorMayor ? (
                     <>
                       <div className="border-t p-4 space-y-2">
                         <p className="text-sm font-semibold mb-3">Tarjeta, Recarga y Chip:</p>
-                        {resumenTarjetaRecargaChip.map((row) => (
+                        {resumenTarjetaRecargaChipCombinado.map((row) => (
                           <div key={row.key} className="flex justify-between items-center text-sm">
                             <span className="text-muted-foreground">{row.nombre}:</span>
                             <span className="font-medium">Bs. {row.total.toFixed(2)}</span>
@@ -3191,19 +3302,19 @@ export default function NewSale() {
                       <div className="border-t bg-muted/30 p-4">
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-muted-foreground">Subtotal</span>
-                          <span className="text-base font-medium">Bs. {resumenTotalVentasRegistradasDia.toFixed(2)}</span>
+                          <span className="text-base font-medium">Bs. {totalResumenVentasYBorrador.toFixed(2)}</span>
                         </div>
                         <div className="mt-2 flex items-center justify-between">
                           <span className="font-display text-lg font-bold">Total</span>
                           <span className="font-display text-2xl font-bold text-primary">
-                            Bs. {resumenTotalVentasRegistradasDia.toFixed(2)}
+                            Bs. {totalResumenVentasYBorrador.toFixed(2)}
                           </span>
                         </div>
                       </div>
                     </>
                   ) : (user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
                     <div className="border-t bg-muted/30 p-4 text-center text-sm text-muted-foreground">
-                      No hay ventas registradas para esta fecha
+                      No hay ventas ni saldos vendidos para esta fecha
                     </div>
                   ) : (
                     <div className="border-t bg-muted/30 p-4">
@@ -3441,17 +3552,16 @@ export default function NewSale() {
           <AlertDialogHeader>
             <AlertDialogTitle className="font-display">Advertencia</AlertDialogTitle>
             <AlertDialogDescription asChild>
-              <div className="space-y-3 text-left text-foreground">
+              <div className="space-y-2 text-left text-foreground">
                 <p>
-                  Si finalizas la venta, <strong>no podrás editar</strong> el preregistro ni los saldos de esta
-                  jornada.
+                  Al finalizar, <strong>no podrás editar</strong> las <strong>ventas del día</strong> ni los saldos de
+                  esta jornada.
                 </p>
                 <p>
-                  Tampoco podrás <strong>solicitar pedidos</strong> hasta que un administrador habilite pedidos para
-                  ese día en <strong>Control de usuarios mayoristas y minoristas</strong> (Control de ventas). Esa
-                  autorización solo vale para la fecha que elija el administrador.
+                  Tampoco podrás <strong>hacer pedidos</strong> hasta que un administrador lo habilite en{' '}
+                  <strong>Control de ventas</strong> para la fecha que corresponda.
                 </p>
-                <p className="text-sm text-muted-foreground">¿Deseas continuar?</p>
+                <p className="text-sm text-muted-foreground">¿Continuar?</p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
