@@ -20,12 +20,17 @@ import {
   minoristaJornadaDiariaService,
   MINORISTA_JORNADA_DIARIA_QUERY_KEY,
 } from '@/services/minorista-jornada-diaria.service';
+import { tryAutoFinalizarVentaMinoristaDiaAnterior } from '@/services/minorista-auto-finalizar-dia-anterior.service';
 import {
   getLocalDateISO,
   getLocalTimeISO,
   formatDateOnlyLocal,
   parseDateOnlyLocal,
 } from '@/lib/utils';
+import {
+  generarArchivoPngQrTransferencia,
+  descargarArchivo,
+} from '@/lib/qr-transferencia-share';
 import { printTicket } from '@/utils/print';
 import { QRCodeSVG } from 'qrcode.react';
 import { salesService } from '@/services/sales.service';
@@ -65,6 +70,8 @@ import {
   X,
   ClipboardList,
   CalendarDays,
+  Share2,
+  Download,
 } from 'lucide-react';
 import {
   Command,
@@ -246,6 +253,8 @@ export default function NewSale() {
   
   // Estados para minoristas: generar QR
   const [showQRDialog, setShowQRDialog] = useState(false);
+  /** Modal QR al consultar un día pasado con transferencia pendiente. */
+  const [showQRDialogConsultaHistorica, setShowQRDialogConsultaHistorica] = useState(false);
   /** Tras finalizar venta se muestra el QR primero; al cerrar el modal debe abrirse el éxito (no al usar "Mostrar QR"). */
   const [showSuccessAfterQrClose, setShowSuccessAfterQrClose] = useState(false);
   const [showMinoristaFinalizarAdvertencia, setShowMinoristaFinalizarAdvertencia] = useState(false);
@@ -305,6 +314,159 @@ export default function NewSale() {
     },
     enabled: !!user?.id && (user.rol === 'minorista' || user.rol === 'mayorista'),
   });
+
+  const { data: transferenciaQRConsultaHistorica = null, isFetching: cargandoTransferenciaQRConsultaHistorica } =
+    useQuery({
+      queryKey: ['minorista-transfer-qr-consulta-dia', user?.id, fechaVistaMinorista],
+      queryFn: async () => {
+        if (!user || user.rol !== 'minorista') return null;
+        const hoy = getLocalDateISO();
+        if (fechaVistaMinorista === hoy) return null;
+        const porDia = await transferenciasService.getPendienteOrigenPorDiaVenta(user.id, fechaVistaMinorista);
+        if (porDia) return porDia;
+        const ultima = await transferenciasService.getPendienteOrigenUltimaVentaFinalizada(user.id);
+        if (!ultima) return null;
+        const venta = await salesService.getById(ultima.id_venta_origen);
+        const fv = venta?.fecha ? String(venta.fecha).split('T')[0] : '';
+        if (venta?.estado === 'completada' && fv === fechaVistaMinorista) return ultima;
+        return null;
+      },
+      enabled: !!user?.id && user.rol === 'minorista' && fechaVistaMinorista !== getLocalDateISO(),
+    });
+
+  const compartirCodigoQRTransferencia = useCallback(async (codigo: string) => {
+    const c = codigo.trim();
+    if (!c) return;
+    const cuerpo = `Código transferencia de saldos (Ventas Jcell):\n${c}`;
+    const title = 'Transferencia de saldos';
+
+    let pngFile: File | null = null;
+    try {
+      pngFile = await generarArchivoPngQrTransferencia(c);
+    } catch {
+      pngFile = null;
+    }
+
+    const nav = typeof navigator !== 'undefined' ? navigator : null;
+
+    try {
+      if (pngFile && nav?.share && nav.canShare) {
+        const full: ShareData = { files: [pngFile], title, text: cuerpo };
+        if (nav.canShare(full)) {
+          await nav.share(full);
+          return;
+        }
+        if (nav.canShare({ files: [pngFile] })) {
+          await nav.share({ files: [pngFile], title });
+          return;
+        }
+      }
+      if (nav?.share) {
+        await nav.share({ title, text: cuerpo });
+        return;
+      }
+      if (pngFile && nav?.clipboard && typeof ClipboardItem !== 'undefined') {
+        try {
+          await nav.clipboard.write([new ClipboardItem({ [pngFile.type]: pngFile })]);
+          toast.success('Imagen del QR copiada al portapapeles. Pegala en WhatsApp u otra app.');
+          return;
+        } catch {
+          /* intentar texto */
+        }
+      }
+      await navigator.clipboard.writeText(c);
+      toast.success(
+        'Código copiado al portapapeles. En este dispositivo no está disponible el menú nativo de compartir.'
+      );
+    } catch (e: unknown) {
+      const err = e as { name?: string };
+      if (err?.name === 'AbortError') return;
+      try {
+        await navigator.clipboard.writeText(c);
+        toast.success('Código copiado al portapapeles');
+      } catch {
+        toast.error('No se pudo compartir ni copiar el código');
+      }
+    }
+  }, []);
+
+  const descargarImagenQRTransferencia = useCallback(async (codigo: string) => {
+    const c = codigo.trim();
+    if (!c) return;
+    try {
+      const file = await generarArchivoPngQrTransferencia(c);
+      descargarArchivo(file);
+      toast.success('Imagen del QR descargada');
+    } catch {
+      toast.error('No se pudo generar la imagen del QR');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (fechaVistaMinorista === getLocalDateISO()) {
+      setShowQRDialogConsultaHistorica(false);
+    }
+  }, [fechaVistaMinorista]);
+
+  const bloqueQRResumenConsultaHistorica = useMemo(() => {
+    if (user?.rol !== 'minorista' || fechaVistaMinorista === getLocalDateISO()) return null;
+    if (cargandoTransferenciaQRConsultaHistorica) {
+      return (
+        <div className="flex justify-center py-3" aria-hidden>
+          <Loader className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
+    const codigo = transferenciaQRConsultaHistorica?.codigo_qr?.trim();
+    if (!codigo) return null;
+    return (
+      <div className="space-y-3 rounded-lg border border-primary/25 bg-muted/40 p-3 sm:p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-center text-muted-foreground">
+          Transferencia de saldos pendiente
+        </p>
+        <p className="text-xs text-center text-muted-foreground px-1">
+          Podés <strong>mostrar el QR</strong> para que lo escaneen, <strong>compartir</strong> código e imagen PNG por
+          WhatsApp, etc., o <strong>descargar la imagen</strong>. El otro minorista lo usa en{' '}
+          <strong>Escanear QR</strong>.
+        </p>
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          <Button
+            type="button"
+            className="h-11 flex-1 gap-2 sm:min-w-[140px]"
+            onClick={() => setShowQRDialogConsultaHistorica(true)}
+          >
+            <QrCode className="h-4 w-4 shrink-0" />
+            Mostrar QR
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 flex-1 gap-2 sm:min-w-[140px]"
+            onClick={() => void compartirCodigoQRTransferencia(codigo)}
+          >
+            <Share2 className="h-4 w-4 shrink-0" />
+            Compartir
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 flex-1 gap-2 sm:min-w-[140px]"
+            onClick={() => void descargarImagenQRTransferencia(codigo)}
+          >
+            <Download className="h-4 w-4 shrink-0" />
+            Guardar imagen
+          </Button>
+        </div>
+      </div>
+    );
+  }, [
+    user?.rol,
+    fechaVistaMinorista,
+    cargandoTransferenciaQRConsultaHistorica,
+    transferenciaQRConsultaHistorica,
+    compartirCodigoQRTransferencia,
+    descargarImagenQRTransferencia,
+  ]);
 
   const minoristaPuedeEditarPreregistro = useMemo(() => {
     if (user?.rol !== 'minorista') return true;
@@ -400,7 +562,7 @@ export default function NewSale() {
     let cancelled = false;
     (async () => {
       try {
-        const t = await transferenciasService.getPendienteOrigenPorDiaVenta(user.id, getLocalDateISO());
+        const t = await transferenciasService.getPendienteOrigenUltimaVentaFinalizada(user.id);
         if (cancelled || !t?.codigo_qr) return;
         setQrCode(t.codigo_qr);
         setTransferenciaCreada(t);
@@ -434,6 +596,28 @@ export default function NewSale() {
         const fechaActual = user.rol === 'minorista' ? fechaVistaMinorista : hoyISO;
 
         if (user.rol === 'minorista') {
+          if (fechaActual === hoyISO) {
+            try {
+              const auto = await tryAutoFinalizarVentaMinoristaDiaAnterior(user.id);
+              if (auto.ok && auto.mode === 'done') {
+                toast.success(
+                  `Se guardó la venta del ${formatDateOnlyLocal(auto.fechaCerrada)} que había quedado sin finalizar.`
+                );
+                void queryClient.invalidateQueries({ queryKey: ['minorista-ultima-finalizada-preregistro'] });
+                void queryClient.invalidateQueries({ queryKey: ['pedidos-gate'] });
+                void queryClient.invalidateQueries({ queryKey: ['preregistro-resumen-ventas-dia'] });
+                void queryClient.invalidateQueries({ queryKey: ['minorista-hay-venta-nueva-venta-hoy'] });
+                void queryClient.invalidateQueries({ queryKey: [MINORISTA_JORNADA_DIARIA_QUERY_KEY] });
+                void queryClient.invalidateQueries({ queryKey: ['minorista-transfer-qr-consulta-dia'] });
+                void refreshUserProfile();
+              } else if (!auto.ok) {
+                console.warn('Auto-cierre venta día anterior:', auto.message);
+              }
+            } catch (e: unknown) {
+              console.warn('Auto-cierre venta día anterior:', e);
+            }
+          }
+
           // Cargar preregistros del minorista actual (sin filtrar por fecha, son reutilizables)
           const preregistros = await preregistrosService.getPreregistrosMinorista(user.id);
 
@@ -555,7 +739,7 @@ export default function NewSale() {
     };
 
     loadPreregistros();
-  }, [user, location.pathname, fechaVistaMinorista]);
+  }, [user, location.pathname, fechaVistaMinorista, queryClient, refreshUserProfile]);
 
   const handleIniciarJornadaMinorista = useCallback(async () => {
     if (!user || user.rol !== 'minorista') return;
@@ -709,6 +893,8 @@ export default function NewSale() {
   /** Filas con venta en curso según saldos de la tabla (subtotal > 0); aún no están en `ventas_*` hasta finalizar. */
   const lineasResumenBorradorPreregistro = useMemo(() => {
     if (user?.rol !== 'minorista' && user?.rol !== 'mayorista') return [];
+    // Consulta de otro día (minorista): el preregistro se arma solo para lectura y repetiría lo ya guardado en BD.
+    if (user?.rol === 'minorista' && !minoristaConsultaEsHoy) return [];
     return preregistroItems
       .filter((i) => i.subtotal > 0)
       .map((i) => ({
@@ -719,7 +905,7 @@ export default function NewSale() {
         precioUnitario: i.precio_unitario,
         subtotal: i.subtotal,
       }));
-  }, [preregistroItems, user?.rol]);
+  }, [preregistroItems, user?.rol, minoristaConsultaEsHoy]);
 
   const totalSubtotalBorradorPreregistro = useMemo(
     () => lineasResumenBorradorPreregistro.reduce((s, x) => s + x.subtotal, 0),
@@ -902,6 +1088,7 @@ export default function NewSale() {
           void queryClient.invalidateQueries({ queryKey: ['pedidos-gate'] });
           void queryClient.invalidateQueries({ queryKey: ['preregistro-resumen-ventas-dia'] });
           void queryClient.invalidateQueries({ queryKey: ['minorista-hay-venta-nueva-venta-hoy'] });
+          void queryClient.invalidateQueries({ queryKey: ['minorista-transfer-qr-consulta-dia'] });
         } else if (user.rol === 'mayorista') {
           // Crear registros en ventas_mayoristas para cada producto vendido
           try {
@@ -1441,8 +1628,9 @@ export default function NewSale() {
                 </div>
                 {user.rol === 'minorista' && (
                   <CardDescription className="text-xs">
-                    En fechas pasadas solo verás detalle si hubo ventas finalizadas ese día; si no hubo, no se muestra
-                    tabla. Crear nueva venta, escanear QR y editar saldos solo están habilitados en la fecha de hoy.
+                    En fechas pasadas solo verás detalle si hubo ventas guardadas ese día (incluye el cierre automático
+                    al día siguiente si no finalizaste). Crear nueva venta, escanear QR y editar saldos solo están
+                    habilitados en la fecha de hoy.
                   </CardDescription>
                 )}
               </CardHeader>
@@ -1523,7 +1711,7 @@ export default function NewSale() {
                         No hubo ventas registradas el <strong>{formatDateOnlyLocal(fechaVistaMinorista)}</strong>.
                       </p>
                       <p className="mt-2 text-sm text-muted-foreground max-w-md">
-                        Solo se muestra el detalle en días en los que finalizaste venta desde Nueva venta. Elegí otra
+                        Solo se muestra el detalle cuando hay ventas guardadas en el sistema para esa fecha. Elegí otra
                         fecha en el calendario o <strong>Ir a hoy</strong> para crear venta o escanear QR.
                       </p>
                     </div>
@@ -2101,6 +2289,7 @@ export default function NewSale() {
                             </p>
                           </div>
                         </div>
+                        {bloqueQRResumenConsultaHistorica}
                       </>
                     ) : (
                       <div className="flex flex-col items-center justify-center py-12 text-center px-4">
@@ -2951,6 +3140,7 @@ export default function NewSale() {
                             </p>
                           </div>
                         </div>
+                        {bloqueQRResumenConsultaHistorica}
                       </>
                     ) : (
                       <div className="flex flex-col items-center justify-center py-12 text-center px-4">
@@ -3589,7 +3779,9 @@ export default function NewSale() {
           <DialogHeader className="text-center">
             <DialogTitle className="font-display text-xl">Transferir Saldos Restantes</DialogTitle>
             <DialogDescription>
-              Escanea este código QR para transferir tus saldos restantes a otro minorista.
+              Escanea este código QR para transferir tus saldos restantes a otro minorista. Con <strong>Compartir</strong>{' '}
+              podés enviar imagen PNG y texto cuando el teléfono lo permita; si no, probá <strong>Descargar imagen</strong>
+              .
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -3610,21 +3802,107 @@ export default function NewSale() {
                 <p className="text-sm text-muted-foreground text-center">
                   Comparte este código con otro minorista para que pueda escanearlo y recibir tus saldos restantes.
                 </p>
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => {
-                    navigator.clipboard.writeText(qrCode);
-                    toast.success('Código QR copiado al portapapeles');
-                  }}
-                >
-                  Copiar Código
-                </Button>
+                <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(qrCode);
+                      toast.success('Código QR copiado al portapapeles');
+                    }}
+                  >
+                    Copiar código
+                  </Button>
+                  <Button
+                    type="button"
+                    className="w-full gap-2"
+                    onClick={() => void compartirCodigoQRTransferencia(qrCode)}
+                  >
+                    <Share2 className="h-4 w-4 shrink-0" />
+                    Compartir
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full gap-2 sm:col-span-2"
+                    onClick={() => void descargarImagenQRTransferencia(qrCode)}
+                  >
+                    <Download className="h-4 w-4 shrink-0" />
+                    Descargar imagen del QR
+                  </Button>
+                </div>
               </div>
             ) : (
               <p className="text-center text-muted-foreground py-4">
                 No se pudo generar el código QR.
               </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* QR consulta histórica (día pasado con transferencia pendiente) */}
+      <Dialog open={showQRDialogConsultaHistorica} onOpenChange={setShowQRDialogConsultaHistorica}>
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="text-center">
+            <DialogTitle className="font-display text-xl">Transferir saldos</DialogTitle>
+            <DialogDescription>
+              Venta del <strong>{formatDateOnlyLocal(fechaVistaMinorista)}</strong>. Otro minorista puede escanear este
+              código en <strong>Escanear QR</strong>. <strong>Compartir</strong> incluye imagen PNG y texto si el
+              dispositivo lo admite.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {transferenciaQRConsultaHistorica?.codigo_qr?.trim() ? (
+              <div className="flex flex-col items-center space-y-4">
+                <div className="rounded-lg border-2 border-primary bg-white p-4">
+                  <QRCodeSVG
+                    value={transferenciaQRConsultaHistorica.codigo_qr.trim()}
+                    size={220}
+                    level="M"
+                    includeMargin
+                    className="mx-auto block"
+                  />
+                </div>
+                <p className="max-w-full px-1 text-center font-mono text-xs text-muted-foreground break-all">
+                  {transferenciaQRConsultaHistorica.codigo_qr}
+                </p>
+                <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(transferenciaQRConsultaHistorica.codigo_qr.trim());
+                      toast.success('Código copiado al portapapeles');
+                    }}
+                  >
+                    Copiar código
+                  </Button>
+                  <Button
+                    type="button"
+                    className="w-full gap-2"
+                    onClick={() =>
+                      void compartirCodigoQRTransferencia(transferenciaQRConsultaHistorica.codigo_qr)
+                    }
+                  >
+                    <Share2 className="h-4 w-4 shrink-0" />
+                    Compartir
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full gap-2 sm:col-span-2"
+                    onClick={() =>
+                      void descargarImagenQRTransferencia(transferenciaQRConsultaHistorica.codigo_qr)
+                    }
+                  >
+                    <Download className="h-4 w-4 shrink-0" />
+                    Descargar imagen del QR
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="py-4 text-center text-muted-foreground">No hay código QR para mostrar.</p>
             )}
           </div>
         </DialogContent>

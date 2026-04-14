@@ -17,6 +17,10 @@ export interface CreateSaleData {
     precio_unitario: number;
     subtotal: number;
   }>;
+  /** Fecha local YYYY-MM-DD de la venta (por defecto: hoy en el cliente). */
+  fecha?: string;
+  /** Hora local HH:mm de la venta (por defecto: ahora en el cliente). */
+  hora?: string;
 }
 
 export const salesService = {
@@ -340,14 +344,15 @@ export const salesService = {
     }
 
     // Crear la venta
-    // Usar fecha y hora del cliente (navegador) en hora local
+    // Usar fecha y hora del cliente (navegador) en hora local, salvo override explícito
     const ahora = new Date();
-    // Obtener fecha en hora local (no UTC)
     const año = ahora.getFullYear();
     const mes = String(ahora.getMonth() + 1).padStart(2, '0');
     const dia = String(ahora.getDate()).padStart(2, '0');
-    const fechaCliente = `${año}-${mes}-${dia}`; // YYYY-MM-DD en hora local
-    const horaCliente = `${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`; // HH:mm en hora local
+    const fechaDefault = `${año}-${mes}-${dia}`; // YYYY-MM-DD en hora local
+    const horaDefault = `${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`; // HH:mm en hora local
+    const fechaCliente = saleData.fecha?.trim() || fechaDefault;
+    const horaCliente = saleData.hora?.trim() || horaDefault;
     
     // Validar que la fecha no sea null o undefined
     if (!fechaCliente || fechaCliente === 'Invalid Date' || fechaCliente.includes('NaN')) {

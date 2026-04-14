@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { TransferenciaSaldo, Sale } from '@/types';
 import { handleSupabaseError } from '@/lib/error-handler';
-import { getLocalDateTimeISO } from '@/lib/utils';
+import { getLocalDateTimeISO, parseDateOnlyLocal } from '@/lib/utils';
 import { usersService } from './users.service';
 import { salesService } from './sales.service';
 // Función para generar código QR único
@@ -10,6 +10,20 @@ const generateQRCode = (): string => {
   const random = Math.random().toString(36).substring(2, 15);
   return `TRF-${timestamp}-${random}`.toUpperCase();
 };
+
+function ventaOrdenTimestamp(venta: Sale & { created_at?: string }): number {
+  if (venta.created_at) {
+    const t = new Date(venta.created_at).getTime();
+    if (!Number.isNaN(t)) return t;
+  }
+  const d = parseDateOnlyLocal(venta.fecha);
+  if (Number.isNaN(d.getTime())) return 0;
+  const parts = (venta.hora || '00:00').split(':');
+  const hh = parseInt(parts[0] ?? '0', 10);
+  const mm = parseInt(parts[1] ?? '0', 10);
+  d.setHours(Number.isFinite(hh) ? hh : 0, Number.isFinite(mm) ? mm : 0, 0, 0);
+  return d.getTime();
+}
 
 export const transferenciasService = {
   // ============================================================================
@@ -130,8 +144,8 @@ export const transferenciasService = {
   // ============================================================================
 
   /**
-   * Transferencia pendiente del minorista origen cuya venta asociada es de `fechaVentaISO` (YYYY-MM-DD).
-   * Sirve para volver a mostrar el QR tras recargar la página.
+   * Transferencia pendiente del minorista origen ligada a la venta **completada** más reciente
+   * cuya fecha (`ventas.fecha`) coincide con `fechaVentaISO` (YYYY-MM-DD).
    */
   async getPendienteOrigenPorDiaVenta(
     idMinorista: string,
@@ -143,22 +157,80 @@ export const transferenciasService = {
       .eq('id_minorista_origen', idMinorista)
       .eq('estado', 'pendiente')
       .order('created_at', { ascending: false })
-      .limit(20);
+      .limit(40);
 
     if (error) throw new Error(handleSupabaseError(error));
     if (!rows?.length) return null;
 
+    type Cand = { row: TransferenciaSaldo; venta: Sale & { created_at?: string } };
+    const candidates: Cand[] = [];
+
     for (const row of rows) {
+      if (!row.codigo_qr) continue;
       try {
-        const venta = await salesService.getById(row.id_venta_origen);
-        if (venta?.fecha === fechaVentaISO && row.codigo_qr) {
-          return row as TransferenciaSaldo;
+        const venta = (await salesService.getById(row.id_venta_origen)) as
+          | (Sale & { created_at?: string })
+          | null;
+        const fechaVenta = venta?.fecha ? String(venta.fecha).split('T')[0] : '';
+        if (
+          venta &&
+          fechaVenta === fechaVentaISO &&
+          venta.estado === 'completada' &&
+          venta.id_vendedor === idMinorista
+        ) {
+          candidates.push({ row: row as TransferenciaSaldo, venta });
         }
       } catch {
         /* siguiente fila */
       }
     }
-    return null;
+
+    if (!candidates.length) return null;
+    candidates.sort((a, b) => ventaOrdenTimestamp(b.venta) - ventaOrdenTimestamp(a.venta));
+    return candidates[0].row;
+  },
+
+  /**
+   * Transferencia pendiente asociada a la última venta **completada** del minorista (cualquier fecha).
+   */
+  async getPendienteOrigenUltimaVentaFinalizada(
+    idMinorista: string
+  ): Promise<TransferenciaSaldo | null> {
+    const { data: rows, error } = await supabase
+      .from('transferencias_saldos')
+      .select('*')
+      .eq('id_minorista_origen', idMinorista)
+      .eq('estado', 'pendiente')
+      .order('created_at', { ascending: false })
+      .limit(40);
+
+    if (error) throw new Error(handleSupabaseError(error));
+    if (!rows?.length) return null;
+
+    type Cand = { row: TransferenciaSaldo; venta: Sale & { created_at?: string } };
+    const candidates: Cand[] = [];
+
+    for (const row of rows) {
+      if (!row.codigo_qr) continue;
+      try {
+        const venta = (await salesService.getById(row.id_venta_origen)) as
+          | (Sale & { created_at?: string })
+          | null;
+        if (
+          venta &&
+          venta.estado === 'completada' &&
+          venta.id_vendedor === idMinorista
+        ) {
+          candidates.push({ row: row as TransferenciaSaldo, venta });
+        }
+      } catch {
+        /* siguiente fila */
+      }
+    }
+
+    if (!candidates.length) return null;
+    candidates.sort((a, b) => ventaOrdenTimestamp(b.venta) - ventaOrdenTimestamp(a.venta));
+    return candidates[0].row;
   },
 
   async getByMinorista(idMinorista: string): Promise<TransferenciaSaldo[]> {

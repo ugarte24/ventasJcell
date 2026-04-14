@@ -28,11 +28,12 @@ import { useAuth } from '@/contexts';
 import { toast } from 'sonner';
 import { transferenciasService } from '@/services/transferencias.service';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { getLocalDateISO } from '@/lib/utils';
+import { getLocalDateISO, formatDateOnlyLocal } from '@/lib/utils';
 import {
   minoristaJornadaDiariaService,
   MINORISTA_JORNADA_DIARIA_QUERY_KEY,
 } from '@/services/minorista-jornada-diaria.service';
+import { tryAutoFinalizarVentaMinoristaDiaAnterior } from '@/services/minorista-auto-finalizar-dia-anterior.service';
 import { TransferenciaSaldo } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
@@ -77,6 +78,7 @@ export default function EscanearQR() {
       setShowConfirmDialog(true);
       queryClient.invalidateQueries({ queryKey: ['transferencias-saldos'] });
       queryClient.invalidateQueries({ queryKey: ['preregistros-minorista'] });
+      queryClient.invalidateQueries({ queryKey: ['minorista-transfer-qr-consulta-dia'] });
       if (user) {
         const hoy = getLocalDateISO();
         try {
@@ -103,6 +105,27 @@ export default function EscanearQR() {
     if (!codigoQR.trim()) {
       toast.error('Ingresa un código QR');
       return;
+    }
+
+    if (user?.rol === 'minorista' && user.id) {
+      try {
+        const auto = await tryAutoFinalizarVentaMinoristaDiaAnterior(user.id);
+        if (auto.ok && auto.mode === 'done') {
+          toast.success(
+            `Se guardó la venta del ${formatDateOnlyLocal(auto.fechaCerrada)} que había quedado sin finalizar.`
+          );
+          void queryClient.invalidateQueries({ queryKey: ['minorista-ultima-finalizada-preregistro'] });
+          void queryClient.invalidateQueries({ queryKey: ['pedidos-gate'] });
+          void queryClient.invalidateQueries({ queryKey: ['preregistro-resumen-ventas-dia'] });
+          void queryClient.invalidateQueries({ queryKey: ['minorista-hay-venta-nueva-venta-hoy'] });
+          void queryClient.invalidateQueries({ queryKey: [MINORISTA_JORNADA_DIARIA_QUERY_KEY] });
+          void queryClient.invalidateQueries({ queryKey: ['preregistros-minorista'] });
+        } else if (!auto.ok) {
+          console.warn('Auto-cierre venta día anterior:', auto.message);
+        }
+      } catch (e: unknown) {
+        console.warn('Auto-cierre venta día anterior:', e);
+      }
     }
 
     setIsValidating(true);

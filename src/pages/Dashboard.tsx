@@ -10,7 +10,7 @@ import { useTodaySales, useSales } from '@/hooks/useSales';
 import { useLowStockProducts } from '@/hooks/useProducts';
 import { useServicios } from '@/hooks/useServicios';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { pedidosService } from '@/services/pedidos.service';
@@ -21,7 +21,8 @@ import {
   minoristaJornadaDiariaService,
   MINORISTA_JORNADA_DIARIA_QUERY_KEY,
 } from '@/services/minorista-jornada-diaria.service';
-import { getLocalDateISO, cn } from '@/lib/utils';
+import { getLocalDateISO, formatDateOnlyLocal, cn } from '@/lib/utils';
+import { tryAutoFinalizarVentaMinoristaDiaAnterior } from '@/services/minorista-auto-finalizar-dia-anterior.service';
 import { NotificacionesArqueo } from '@/components/NotificacionesArqueo';
 
 export default function Dashboard() {
@@ -115,6 +116,35 @@ export default function Dashboard() {
   });
 
   const [panelRefreshing, setPanelRefreshing] = useState(false);
+
+  useEffect(() => {
+    if (!user || user.rol !== 'minorista') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const auto = await tryAutoFinalizarVentaMinoristaDiaAnterior(user.id);
+        if (cancelled) return;
+        if (auto.ok && auto.mode === 'done') {
+          toast.success(
+            `Se guardó la venta del ${formatDateOnlyLocal(auto.fechaCerrada)} que había quedado sin finalizar.`
+          );
+          await queryClient.invalidateQueries({ queryKey: ['sales'] });
+          await queryClient.invalidateQueries({ queryKey: ['pedidos'] });
+          await queryClient.invalidateQueries({ queryKey: ['preregistros'] });
+          await queryClient.invalidateQueries({ queryKey: ['minorista-ultima-finalizada-preregistro'] });
+          await queryClient.invalidateQueries({ queryKey: ['minorista-hay-venta-nueva-venta-hoy'] });
+          await queryClient.invalidateQueries({ queryKey: [MINORISTA_JORNADA_DIARIA_QUERY_KEY] });
+        } else if (!auto.ok) {
+          console.warn('Auto-cierre venta día anterior:', auto.message);
+        }
+      } catch (e: unknown) {
+        if (!cancelled) console.warn('Auto-cierre venta día anterior:', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, user?.rol, queryClient]);
 
   const minoristaBloqueadoPorJornadaPendiente = useMemo(() => {
     if (user?.rol !== 'minorista') return false;

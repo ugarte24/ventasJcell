@@ -75,6 +75,16 @@ export function formatDateOnlyLocal(isoDate: string | undefined | null): string 
   return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
 }
 
+/** Suma días calendario en hora local y devuelve YYYY-MM-DD. */
+export function addCalendarDaysLocal(ymd: string, deltaDays: number): string {
+  const d = parseDateOnlyLocal(ymd);
+  d.setDate(d.getDate() + deltaDays);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 /**
  * Comprime una imagen si excede el tamaño máximo especificado
  * Usa parámetros conservadores para mantener buena calidad visual
