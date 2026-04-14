@@ -761,6 +761,10 @@ export default function NewSale() {
       toast.error('No hay preregistros');
       return;
     }
+    const confirmar = window.confirm(
+      'Vas a iniciar una nueva venta del día. Esto restablecerá los saldos al máximo según tu preregistro y pedidos entregados. ¿Deseas continuar?'
+    );
+    if (!confirmar) return;
     setIniciandoJornadaMinorista(true);
     try {
       for (const item of preregistroItems) {
