@@ -1791,19 +1791,6 @@ export default function NewSale() {
                   )
                 ) : (
                   <div className="space-y-4">
-                    {user?.rol === 'minorista' && minoristaEdicionBloqueada && minoristaConsultaEsHoy && (
-                      <Alert>
-                        <AlertDescription>
-                          <strong>Venta del día ya finalizada:</strong> no podés editar saldos ni cerrar otra venta
-                          desde aquí. Un administrador debe activar <strong>Editar Nueva venta</strong> en{' '}
-                          <strong>Gestión de usuarios</strong> o <strong>Control de ventas</strong> para que puedas
-                          corregir y volver a finalizar (se revierte la última venta generada desde esta pantalla). El
-                          botón <strong>Crear nueva venta</strong> del panel superior solo aplica cuando falta iniciar
-                          la jornada de hoy tras haber cerrado un <em>día anterior</em>; no desbloquea una venta ya
-                          cerrada hoy.
-                        </AlertDescription>
-                      </Alert>
-                    )}
                     {((user?.rol === 'mayorista') || (user?.rol === 'minorista' && minoristaConsultaEsHoy)) && (
                       <div className="flex justify-end -mx-1">
                         <Button
