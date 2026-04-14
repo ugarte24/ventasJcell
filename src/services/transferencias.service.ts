@@ -90,7 +90,14 @@ export const transferenciasService = {
       .eq('estado', 'pendiente')
       .single();
 
-    if (findError || !transferencia) {
+    if (findError) {
+      if (findError.code !== 'PGRST116') {
+        throw new Error(handleSupabaseError(findError));
+      }
+      throw new Error('Código QR no válido o transferencia ya procesada');
+    }
+
+    if (!transferencia) {
       throw new Error('Código QR no válido o transferencia ya procesada');
     }
 
