@@ -133,11 +133,11 @@ export default function EscanearQR() {
     }
 
     setIsValidating(true);
-    escanearQRMutation.mutate(codigoQR.trim());
+    escanearQRMutation.mutate(codigoQR.trim().replace(/\s+/g, '').toUpperCase());
   };
 
   const handleValidarQRDirecto = async (codigo: string) => {
-    const normalizado = codigo.trim();
+    const normalizado = codigo.trim().replace(/\s+/g, '').toUpperCase();
     if (!normalizado) return;
     setCodigoQR(normalizado);
 

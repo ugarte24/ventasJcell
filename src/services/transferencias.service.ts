@@ -77,11 +77,16 @@ export const transferenciasService = {
     codigoQR: string,
     idMinoristaDestino: string
   ): Promise<TransferenciaSaldo> {
+    const codigoNormalizado = codigoQR.trim().replace(/\s+/g, '').toUpperCase();
+    if (!codigoNormalizado) {
+      throw new Error('Código QR no válido o transferencia ya procesada');
+    }
+
     // Buscar transferencia por código QR
     const { data: transferencia, error: findError } = await supabase
       .from('transferencias_saldos')
       .select('*')
-      .eq('codigo_qr', codigoQR)
+      .eq('codigo_qr', codigoNormalizado)
       .eq('estado', 'pendiente')
       .single();
 
