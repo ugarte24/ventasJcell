@@ -504,6 +504,21 @@ $$ LANGUAGE plpgsql;
 -- SECCIÓN 4: TRIGGERS
 -- ============================================================================
 
+-- Permite re-ejecutar el script sin error 42710 (trigger ya existe)
+DROP TRIGGER IF EXISTS update_usuarios_updated_at ON usuarios;
+DROP TRIGGER IF EXISTS update_categorias_updated_at ON categorias;
+DROP TRIGGER IF EXISTS update_productos_updated_at ON productos;
+DROP TRIGGER IF EXISTS update_clientes_updated_at ON clientes;
+DROP TRIGGER IF EXISTS update_ventas_updated_at ON ventas;
+DROP TRIGGER IF EXISTS update_servicios_updated_at ON servicios;
+DROP TRIGGER IF EXISTS update_registros_servicios_updated_at ON registros_servicios;
+DROP TRIGGER IF EXISTS update_arqueos_caja_updated_at ON arqueos_caja;
+DROP TRIGGER IF EXISTS trigger_calcular_subtotal ON detalle_venta;
+DROP TRIGGER IF EXISTS trigger_actualizar_stock_venta ON detalle_venta;
+DROP TRIGGER IF EXISTS trigger_revertir_stock_venta ON ventas;
+DROP TRIGGER IF EXISTS trigger_recalcular_interes_venta ON ventas;
+DROP TRIGGER IF EXISTS trigger_calcular_montos_registro_servicio ON registros_servicios;
+
 -- Triggers para updated_at
 CREATE TRIGGER update_usuarios_updated_at
   BEFORE UPDATE ON usuarios

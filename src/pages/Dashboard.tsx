@@ -26,7 +26,7 @@ import { tryAutoFinalizarVentaMinoristaDiaAnterior } from '@/services/minorista-
 import { NotificacionesArqueo } from '@/components/NotificacionesArqueo';
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, refreshUserProfile } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isMinoristaMayorista = user?.rol === 'minorista' || user?.rol === 'mayorista';
@@ -126,7 +126,7 @@ export default function Dashboard() {
         if (cancelled) return;
         if (auto.ok && auto.mode === 'done') {
           toast.success(
-            `Se guardó la venta del ${formatDateOnlyLocal(auto.fechaCerrada)} que había quedado sin finalizar.`
+            `Se guardó la venta del ${formatDateOnlyLocal(auto.fechaCerrada)} que había quedado sin finalizar. Podés seguir con el día de hoy en Nueva venta.`
           );
           await queryClient.invalidateQueries({ queryKey: ['sales'] });
           await queryClient.invalidateQueries({ queryKey: ['pedidos'] });
@@ -134,6 +134,7 @@ export default function Dashboard() {
           await queryClient.invalidateQueries({ queryKey: ['minorista-ultima-finalizada-preregistro'] });
           await queryClient.invalidateQueries({ queryKey: ['minorista-hay-venta-nueva-venta-hoy'] });
           await queryClient.invalidateQueries({ queryKey: [MINORISTA_JORNADA_DIARIA_QUERY_KEY] });
+          await refreshUserProfile();
         } else if (!auto.ok) {
           console.warn('Auto-cierre venta día anterior:', auto.message);
         }

@@ -3,6 +3,66 @@ import { Sale, SaleDetail } from '@/types';
 import { handleSupabaseError } from '@/lib/error-handler';
 import { getLocalDateTimeISO } from '@/lib/utils';
 
+type ArqueoAjusteAnulacion = { id: string; total_ventas: number };
+
+/**
+ * Arqueo abierto del vendedor para restar total_ventas al anular.
+ * Compatibilidad: algunas BD no tienen columna `estado`; otras usan `id_administrador` en lugar de `id_usuario`.
+ */
+async function buscarArqueoAbiertoParaAnulacion(
+  fechaVenta: string,
+  idVendedor: string
+): Promise<ArqueoAjusteAnulacion | null> {
+  const res1 = await supabase
+    .from('arqueos_caja')
+    .select('id, total_ventas')
+    .eq('fecha', fechaVenta)
+    .eq('id_usuario', idVendedor)
+    .eq('estado', 'abierto')
+    .maybeSingle();
+
+  if (!res1.error) {
+    return res1.data
+      ? { id: res1.data.id, total_ventas: Number(res1.data.total_ventas) }
+      : null;
+  }
+  if (res1.error.code === 'PGRST116') return null;
+
+  const res2 = await supabase
+    .from('arqueos_caja')
+    .select('id, total_ventas')
+    .eq('fecha', fechaVenta)
+    .eq('id_usuario', idVendedor)
+    .maybeSingle();
+
+  if (!res2.error) {
+    return res2.data
+      ? { id: res2.data.id, total_ventas: Number(res2.data.total_ventas) }
+      : null;
+  }
+  if (res2.error.code === 'PGRST116') return null;
+
+  const res3 = await supabase
+    .from('arqueos_caja')
+    .select('id, total_ventas')
+    .eq('fecha', fechaVenta)
+    .eq('id_administrador', idVendedor)
+    .maybeSingle();
+
+  if (!res3.error) {
+    return res3.data
+      ? { id: res3.data.id, total_ventas: Number(res3.data.total_ventas) }
+      : null;
+  }
+  if (res3.error.code !== 'PGRST116') {
+    console.warn(
+      'arqueos_caja: no se ajustará total_ventas tras anular venta:',
+      handleSupabaseError(res3.error)
+    );
+  }
+  return null;
+}
+
 export interface CreateSaleData {
   total: number;
   metodo_pago: 'efectivo' | 'qr' | 'transferencia' | 'credito';
@@ -511,82 +571,12 @@ export const salesService = {
       throw new Error('Solo se pueden anular ventas del día actual');
     }
 
-    // Fecha del movimiento de inventario: la de la venta anulada
-    const fechaLocal = String(venta.fecha);
+    // Stock y movimientos_inventario: el trigger `revertir_stock_venta` (AFTER UPDATE ventas)
+    // ya restaura stock e inserta movimientos con el esquema de la BD. No duplicar aquí:
+    // un INSERT desde el cliente con columnas distintas (p. ej. tipo_movimiento) provoca 400
+    // y además duplicaría la reversión si el trigger está activo.
 
-    // 2. OBTENER DETALLES DE LA VENTA PARA REVERTIR STOCK
-    const { data: detalles, error: detallesError } = await supabase
-      .from('detalle_venta')
-      .select('*')
-      .eq('id_venta', id);
-
-    if (detallesError) {
-      throw new Error(`Error al obtener detalles de la venta: ${handleSupabaseError(detallesError)}`);
-    }
-
-    // 3. CREAR MOVIMIENTOS DE INVENTARIO DE ENTRADA Y REVERTIR STOCK
-    if (detalles && detalles.length > 0) {
-      const createdAt = getLocalDateTimeISO();
-
-      // Construir observación con información de auditoría
-      const observacionMovimiento = motivoAnulacion 
-        ? `Devolución por anulación de venta ${id.substring(0, 8)}. Motivo: ${motivoAnulacion}. Anulado por: ${idUsuarioAnulacion || 'Sistema'}`
-        : `Devolución por anulación de venta ${id.substring(0, 8)}. Anulado por: ${idUsuarioAnulacion || 'Sistema'}`;
-
-      // Revertir stock de productos y crear movimientos de inventario
-      for (const detalle of detalles) {
-        // Obtener stock actual del producto
-        const { data: producto, error: productoError } = await supabase
-          .from('productos')
-          .select('stock_actual')
-          .eq('id', detalle.id_producto)
-          .single();
-
-        if (productoError) {
-          throw new Error(`Error al obtener producto: ${handleSupabaseError(productoError)}`);
-        }
-
-        if (!producto) {
-          throw new Error(`Producto no encontrado: ${detalle.id_producto}`);
-        }
-
-        // Actualizar stock (incrementar)
-        const nuevoStock = producto.stock_actual + detalle.cantidad;
-        const { error: stockError } = await supabase
-          .from('productos')
-          .update({ stock_actual: nuevoStock })
-          .eq('id', detalle.id_producto);
-
-        if (stockError) {
-          throw new Error(`Error al actualizar stock: ${handleSupabaseError(stockError)}`);
-        }
-
-        // Crear movimiento de inventario de entrada (devolución)
-        const { error: movimientoError } = await supabase
-          .from('movimientos_inventario')
-          .insert({
-            id_producto: detalle.id_producto,
-            tipo_movimiento: 'entrada',
-            cantidad: detalle.cantidad,
-            motivo: 'devolución',
-            fecha: fechaLocal,
-            id_usuario: idUsuarioAnulacion || venta.id_vendedor, // Usuario que anuló
-            observacion: observacionMovimiento,
-            created_at: createdAt,
-          });
-
-        if (movimientoError) {
-          // Si falla el movimiento, revertir el stock
-          await supabase
-            .from('productos')
-            .update({ stock_actual: producto.stock_actual })
-            .eq('id', detalle.id_producto);
-          throw new Error(`Error al crear movimiento de inventario: ${handleSupabaseError(movimientoError)}`);
-        }
-      }
-    }
-
-    // 4. ACTUALIZAR ESTADO DE LA VENTA
+    // 2. ACTUALIZAR ESTADO DE LA VENTA
     const updatedAt = getLocalDateTimeISO();
     
     const { error: updateError } = await supabase
@@ -601,21 +591,10 @@ export const salesService = {
       throw new Error(handleSupabaseError(updateError));
     }
 
-    // 5. ACTUALIZAR EL TOTAL DE VENTAS DEL ARQUEO DE CAJA
+    // 3. ACTUALIZAR EL TOTAL DE VENTAS DEL ARQUEO DE CAJA
     // Solo actualizar si la venta NO es a crédito (las ventas a crédito no se suman al arqueo)
     if (venta.metodo_pago !== 'credito') {
-      // Buscar arqueo abierto del día de la venta
-      const { data: arqueoAbierto, error: arqueoError } = await supabase
-        .from('arqueos_caja')
-        .select('*')
-        .eq('fecha', venta.fecha)
-        .eq('estado', 'abierto')
-        .maybeSingle();
-
-      if (arqueoError && arqueoError.code !== 'PGRST116') {
-        // Si hay un error real (no es "no encontrado"), lanzar excepción
-        throw new Error(`Error al buscar arqueo de caja: ${handleSupabaseError(arqueoError)}`);
-      }
+      const arqueoAbierto = await buscarArqueoAbiertoParaAnulacion(String(venta.fecha), venta.id_vendedor);
 
       // Si existe un arqueo abierto, actualizar su total_ventas
       if (arqueoAbierto) {

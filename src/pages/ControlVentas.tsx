@@ -262,6 +262,15 @@ export default function ControlVentas() {
     }) => {
       const { usuario: u, fecha, pedidos_habilitado, efectivo_entregado, edicion_nueva_venta } = payload;
 
+      // Pedidos y efectivo primero: no deben quedar bloqueados si falla la anulación de venta
+      // al habilitar "Editar Nueva venta" (p. ej. inventario / triggers).
+      await usuarioControlDiarioService.upsert({
+        id_usuario: u.id,
+        fecha,
+        pedidos_habilitado,
+        efectivo_entregado,
+      });
+
       if (u.rol === 'minorista' && typeof edicion_nueva_venta === 'boolean' && user?.id) {
         const antes = u.edicion_preregistro_nueva_venta_permitida === true;
         const despues = edicion_nueva_venta;
@@ -272,13 +281,6 @@ export default function ControlVentas() {
           await usersService.update(u.id, { edicion_preregistro_nueva_venta_permitida: despues });
         }
       }
-
-      await usuarioControlDiarioService.upsert({
-        id_usuario: u.id,
-        fecha,
-        pedidos_habilitado,
-        efectivo_entregado,
-      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['usuario-control-diario'] });

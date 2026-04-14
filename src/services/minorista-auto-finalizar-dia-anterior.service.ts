@@ -166,10 +166,12 @@ export async function tryAutoFinalizarVentaMinoristaDiaAnterior(
       }
     }
 
+    // No usar false aquí: bloquea la edición del usuario en general y la UI muestra
+    // "venta finalizada" hoy aunque solo se haya cerrado el día anterior por el sistema.
     try {
-      await usersService.minoristaSetEdicionPreregistroPermitida(false);
+      await usersService.minoristaSetEdicionPreregistroPermitida(true);
     } catch (e: unknown) {
-      console.error('Auto-cierre día anterior: error bloqueando edición preregistro', e);
+      console.error('Auto-cierre día anterior: error restableciendo edición preregistro para el nuevo día', e);
     }
 
     if (typeof sessionStorage !== 'undefined') {

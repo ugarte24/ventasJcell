@@ -13,18 +13,26 @@ BEGIN
     AND table_name = 'arqueos_caja' 
     AND column_name = 'estado'
   ) THEN
-    ALTER TABLE arqueos_caja 
-    ADD COLUMN estado VARCHAR(20) DEFAULT 'abierto' NOT NULL 
+    ALTER TABLE arqueos_caja
+    ADD COLUMN estado VARCHAR(20) DEFAULT 'abierto' NOT NULL
     CHECK (estado IN ('abierto', 'cerrado'));
-    
-    -- Actualizar registros existentes sin estado
-    UPDATE arqueos_caja 
-    SET estado = CASE 
-      WHEN hora_cierre IS NULL THEN 'abierto'
-      ELSE 'cerrado'
-    END
-    WHERE estado IS NULL;
-    
+
+    -- El DEFAULT ya dejó filas existentes en 'abierto'. Solo algunas BD tienen hora_cierre
+    -- (esquema extendido); si existe, marcar 'cerrado' donde corresponda.
+    IF EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'arqueos_caja'
+        AND column_name = 'hora_cierre'
+    ) THEN
+      UPDATE arqueos_caja
+      SET estado = CASE
+        WHEN hora_cierre IS NULL THEN 'abierto'
+        ELSE 'cerrado'
+      END;
+    END IF;
+
     RAISE NOTICE 'Columna estado agregada a arqueos_caja';
   ELSE
     RAISE NOTICE 'Columna estado ya existe en arqueos_caja';

@@ -41,7 +41,7 @@ import { es } from 'date-fns/locale';
 import jsQR from 'jsqr';
 
 export default function EscanearQR() {
-  const { user } = useAuth();
+  const { user, refreshUserProfile } = useAuth();
   const queryClient = useQueryClient();
   const [codigoQR, setCodigoQR] = useState('');
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -112,7 +112,7 @@ export default function EscanearQR() {
         const auto = await tryAutoFinalizarVentaMinoristaDiaAnterior(user.id);
         if (auto.ok && auto.mode === 'done') {
           toast.success(
-            `Se guardó la venta del ${formatDateOnlyLocal(auto.fechaCerrada)} que había quedado sin finalizar.`
+            `Se guardó la venta del ${formatDateOnlyLocal(auto.fechaCerrada)} que había quedado sin finalizar (cierre automático). Podés seguir con el día de hoy en Nueva venta.`
           );
           void queryClient.invalidateQueries({ queryKey: ['minorista-ultima-finalizada-preregistro'] });
           void queryClient.invalidateQueries({ queryKey: ['pedidos-gate'] });
@@ -120,6 +120,7 @@ export default function EscanearQR() {
           void queryClient.invalidateQueries({ queryKey: ['minorista-hay-venta-nueva-venta-hoy'] });
           void queryClient.invalidateQueries({ queryKey: [MINORISTA_JORNADA_DIARIA_QUERY_KEY] });
           void queryClient.invalidateQueries({ queryKey: ['preregistros-minorista'] });
+          void refreshUserProfile();
         } else if (!auto.ok) {
           console.warn('Auto-cierre venta día anterior:', auto.message);
         }

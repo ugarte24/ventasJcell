@@ -72,6 +72,7 @@ import {
   CalendarDays,
   Share2,
   Download,
+  Lock,
 } from 'lucide-react';
 import {
   Command,
@@ -601,7 +602,7 @@ export default function NewSale() {
               const auto = await tryAutoFinalizarVentaMinoristaDiaAnterior(user.id);
               if (auto.ok && auto.mode === 'done') {
                 toast.success(
-                  `Se guardó la venta del ${formatDateOnlyLocal(auto.fechaCerrada)} que había quedado sin finalizar.`
+                  `Se guardó la venta del ${formatDateOnlyLocal(auto.fechaCerrada)} que había quedado sin finalizar (cierre automático). No equivale a haber finalizado hoy: ya podés editar el preregistro del día actual.`
                 );
                 void queryClient.invalidateQueries({ queryKey: ['minorista-ultima-finalizada-preregistro'] });
                 void queryClient.invalidateQueries({ queryKey: ['pedidos-gate'] });
@@ -1784,8 +1785,13 @@ export default function NewSale() {
                     {user?.rol === 'minorista' && minoristaEdicionBloqueada && minoristaConsultaEsHoy && (
                       <Alert>
                         <AlertDescription>
-                          Venta finalizada: no puedes editar los saldos del preregistro. Un administrador puede
-                          volver a habilitar la edición en Gestión de usuarios.
+                          <strong>Venta del día ya finalizada:</strong> no podés editar saldos ni cerrar otra venta
+                          desde aquí. Un administrador debe activar <strong>Editar Nueva venta</strong> en{' '}
+                          <strong>Gestión de usuarios</strong> o <strong>Control de ventas</strong> para que puedas
+                          corregir y volver a finalizar (se revierte la última venta generada desde esta pantalla). El
+                          botón <strong>Crear nueva venta</strong> del panel superior solo aplica cuando falta iniciar
+                          la jornada de hoy tras haber cerrado un <em>día anterior</em>; no desbloquea una venta ya
+                          cerrada hoy.
                         </AlertDescription>
                       </Alert>
                     )}
@@ -1931,20 +1937,28 @@ export default function NewSale() {
                                     {item.subtotal.toFixed(2)}
                                   </td>
                                   <td className="p-1.5 sm:p-2 md:p-4 align-middle text-right">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-7 w-7 sm:h-8 sm:w-8 p-0"
-                                      onClick={() => {
-                                        setEditingCantidadRestante(item.id);
-                                        setEditCantidadRestanteValue(item.cantidadRestante.toString());
-                                      }}
-                                      disabled={
-                                        editingCantidadRestante === item.id || minoristaSaldoBloqueado
-                                      }
-                                    >
-                                      <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
-                                    </Button>
+                                    {minoristaSaldoBloqueado ? (
+                                      <span
+                                        className="inline-flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-md text-muted-foreground"
+                                        title="Edición bloqueada: venta del día finalizada o consulta de otra fecha. Pedí a un administrador que active Editar Nueva venta si hace falta corregir."
+                                      >
+                                        <Lock className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" aria-hidden />
+                                        <span className="sr-only">Edición de saldo bloqueada</span>
+                                      </span>
+                                    ) : (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+                                        onClick={() => {
+                                          setEditingCantidadRestante(item.id);
+                                          setEditCantidadRestanteValue(item.cantidadRestante.toString());
+                                        }}
+                                        disabled={editingCantidadRestante === item.id}
+                                      >
+                                        <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
+                                      </Button>
+                                    )}
                                   </td>
                                 </tr>
                               );
@@ -2564,8 +2578,8 @@ export default function NewSale() {
                           ) : (
                             <div className="space-y-2 py-2 px-1 text-center">
                               <p className="text-sm text-muted-foreground">
-                                Venta finalizada. Para editar de nuevo, un administrador debe habilitar la edición en
-                                Gestión de usuarios.
+                                Venta finalizada. Para editar de nuevo, un administrador debe activar{' '}
+                                <strong>Editar Nueva venta</strong> (Gestión de usuarios o Control de ventas).
                               </p>
                               <p className="text-xs text-muted-foreground">
                                 Mostrar QR solo aparece si había saldo pendiente al finalizar y existe una transferencia
@@ -3577,8 +3591,8 @@ export default function NewSale() {
                         ) : (
                           <div className="space-y-2 px-2 text-center">
                             <p className="text-sm text-muted-foreground">
-                              Venta finalizada. Para editar saldos, un administrador debe habilitar la edición en
-                              Gestión de usuarios.
+                              Venta finalizada. Un administrador debe activar <strong>Editar Nueva venta</strong>{' '}
+                              (Gestión de usuarios o Control de ventas) para corregir y volver a finalizar.
                             </p>
                             <p className="text-xs text-muted-foreground">
                               Mostrar QR solo aparece si al finalizar quedó saldo por transferir y la transferencia sigue
