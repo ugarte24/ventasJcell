@@ -491,23 +491,23 @@ export default function NewSale() {
   const minoristaMostrarQREnLugarDeFinalizar =
     minoristaEdicionBloqueada && Boolean(qrCode.trim());
 
+  const minoristaConsultaEsHoy =
+    user?.rol !== 'minorista' || fechaVistaMinorista === getLocalDateISO();
+
   const minoristaBloqueadoPorJornadaPendiente = useMemo(() => {
     if (user?.rol !== 'minorista') return false;
+    // Regla estricta: para trabajar hoy se debe iniciar jornada explícitamente.
+    // Solo se desbloquea si ya hay jornada iniciada hoy o una venta guardada hoy.
+    if (!minoristaConsultaEsHoy) return false;
     if (minoristaHayVentaNuevaVentaHoy) return false;
-    const ultima = minoristaUltimaFechaFinalizadaVenta;
-    if (ultima == null || ultima === '' || ultima >= fechaHoy) return false;
     if (minoristaJornadaIniciadaHoy) return false;
     return true;
   }, [
     user?.rol,
+    minoristaConsultaEsHoy,
     minoristaHayVentaNuevaVentaHoy,
-    minoristaUltimaFechaFinalizadaVenta,
     minoristaJornadaIniciadaHoy,
-    fechaHoy,
   ]);
-
-  const minoristaConsultaEsHoy =
-    user?.rol !== 'minorista' || fechaVistaMinorista === getLocalDateISO();
 
   const minoristaBloqueadoPorJornadaPendienteVista =
     minoristaBloqueadoPorJornadaPendiente && minoristaConsultaEsHoy;
