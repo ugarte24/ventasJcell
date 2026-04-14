@@ -94,17 +94,20 @@ export const transferenciasService = {
       throw new Error('No puedes escanear tu propio código QR');
     }
 
-    // Verificar que la venta origen sea la última venta del minorista origen
-    const { data: ultimaVenta, error: ventaError } = await supabase
-      .from('ventas')
-      .select('*')
-      .eq('id_vendedor', transferencia.id_minorista_origen)
+    // Verificar que este QR corresponda a la transferencia pendiente más reciente del origen.
+    // Esto evita falsos "QR no válido" por restricciones de lectura (RLS) sobre tabla `ventas`.
+    const { data: ultimaPendienteOrigen, error: ultPendErr } = await supabase
+      .from('transferencias_saldos')
+      .select('id')
+      .eq('id_minorista_origen', transferencia.id_minorista_origen)
+      .eq('estado', 'pendiente')
       .order('created_at', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
-    if (ventaError || !ultimaVenta || ultimaVenta.id !== transferencia.id_venta_origen) {
-      throw new Error('El código QR no corresponde a la última venta del minorista');
+    if (ultPendErr) throw new Error(handleSupabaseError(ultPendErr));
+    if (ultimaPendienteOrigen && ultimaPendienteOrigen.id !== transferencia.id) {
+      throw new Error('El código QR no corresponde a la última transferencia pendiente del minorista');
     }
 
     // Actualizar transferencia
