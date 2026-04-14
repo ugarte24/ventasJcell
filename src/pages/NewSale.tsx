@@ -1699,8 +1699,7 @@ export default function NewSale() {
                       </Button>
                       <Button
                         type="button"
-                        variant="outline"
-                        className="h-12 gap-2 text-base w-full sm:w-auto sm:min-w-[220px]"
+                        className="h-12 gap-2 text-base w-full sm:w-auto sm:min-w-[220px] bg-green-600 text-white hover:bg-green-700"
                         disabled={!minoristaConsultaEsHoy}
                         onClick={() => {
                           if (!minoristaConsultaEsHoy) {
