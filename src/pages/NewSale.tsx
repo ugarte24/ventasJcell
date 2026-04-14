@@ -472,10 +472,19 @@ export default function NewSale() {
   const minoristaPuedeEditarPreregistro = useMemo(() => {
     if (user?.rol !== 'minorista') return true;
     const p = user.edicion_preregistro_nueva_venta_permitida;
-    if (p === false) return false;
+    // El bloqueo por "venta finalizada" debe aplicar solo al día actual.
+    const minoristaFinalizoHoy =
+      minoristaHayVentaNuevaVentaHoy || minoristaUltimaFechaFinalizadaVenta === fechaHoy;
+    if (p === false) return !minoristaFinalizoHoy;
     if (p === true) return true;
-    return !minoristaHayVentaNuevaVentaHoy;
-  }, [user?.rol, user?.edicion_preregistro_nueva_venta_permitida, minoristaHayVentaNuevaVentaHoy]);
+    return !minoristaFinalizoHoy;
+  }, [
+    user?.rol,
+    user?.edicion_preregistro_nueva_venta_permitida,
+    minoristaHayVentaNuevaVentaHoy,
+    minoristaUltimaFechaFinalizadaVenta,
+    fechaHoy,
+  ]);
 
   const minoristaEdicionBloqueada =
     user?.rol === 'minorista' && !minoristaPuedeEditarPreregistro;
