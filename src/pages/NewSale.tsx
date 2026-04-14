@@ -259,6 +259,7 @@ export default function NewSale() {
   /** Tras finalizar venta se muestra el QR primero; al cerrar el modal debe abrirse el éxito (no al usar "Mostrar QR"). */
   const [showSuccessAfterQrClose, setShowSuccessAfterQrClose] = useState(false);
   const [showMinoristaFinalizarAdvertencia, setShowMinoristaFinalizarAdvertencia] = useState(false);
+  const [showMinoristaIniciarConfirmacion, setShowMinoristaIniciarConfirmacion] = useState(false);
   const [pendingFinalizarCierraSheet, setPendingFinalizarCierraSheet] = useState(false);
   const [qrCode, setQrCode] = useState<string>('');
   const [transferenciaCreada, setTransferenciaCreada] = useState<TransferenciaSaldo | null>(null);
@@ -761,10 +762,6 @@ export default function NewSale() {
       toast.error('No hay preregistros');
       return;
     }
-    const confirmar = window.confirm(
-      'Vas a iniciar una nueva venta del día. Esto restablecerá los saldos al máximo según tu preregistro y pedidos entregados. ¿Deseas continuar?'
-    );
-    if (!confirmar) return;
     setIniciandoJornadaMinorista(true);
     try {
       for (const item of preregistroItems) {
@@ -1681,7 +1678,7 @@ export default function NewSale() {
                       <Button
                         type="button"
                         className="h-12 gap-2 text-base w-full sm:w-auto sm:min-w-[220px]"
-                        onClick={() => void handleIniciarJornadaMinorista()}
+                        onClick={() => setShowMinoristaIniciarConfirmacion(true)}
                         disabled={
                           iniciandoJornadaMinorista ||
                           preregistroItems.length === 0 ||
@@ -3755,6 +3752,38 @@ export default function NewSale() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Confirmación antes de iniciar nueva venta (minorista) */}
+      <AlertDialog
+        open={showMinoristaIniciarConfirmacion}
+        onOpenChange={setShowMinoristaIniciarConfirmacion}
+      >
+        <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display">Confirmar nueva venta</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-left text-foreground">
+                <p>
+                  Vas a iniciar una nueva venta del día.
+                </p>
+                <p>
+                  Esto restablecerá los saldos al máximo según tu preregistro y pedidos entregados.
+                </p>
+                <p className="text-sm text-muted-foreground">¿Deseas continuar?</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              onClick={() => void handleIniciarJornadaMinorista()}
+            >
+              Sí, iniciar venta
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Advertencia antes de finalizar venta (minorista) */}
       <AlertDialog
