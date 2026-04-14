@@ -900,22 +900,34 @@ export default function NewSale() {
     [lineasResumenVentasRegistradas]
   );
 
-  /** Filas con venta en curso según saldos de la tabla (subtotal > 0); aún no están en `ventas_*` hasta finalizar. */
+  /** Filas con venta en curso no guardada todavía (evita duplicar lo ya finalizado en BD). */
   const lineasResumenBorradorPreregistro = useMemo(() => {
     if (user?.rol !== 'minorista' && user?.rol !== 'mayorista') return [];
     // Consulta de otro día (minorista): el preregistro se arma solo para lectura y repetiría lo ya guardado en BD.
     if (user?.rol === 'minorista' && !minoristaConsultaEsHoy) return [];
+    const registradasPorProducto = new Map<string, number>();
+    lineasResumenVentasRegistradas.forEach((row) => {
+      registradasPorProducto.set(row.key, row.cantidadVendida);
+    });
+
     return preregistroItems
-      .filter((i) => i.subtotal > 0)
-      .map((i) => ({
-        key: `borrador-${i.id}`,
-        nombre: i.nombre,
-        id_categoria: i.id_categoria,
-        cantidadVendida: Math.max(0, i.cantidad + i.aumento - i.cantidadRestante),
-        precioUnitario: i.precio_unitario,
-        subtotal: i.subtotal,
-      }));
-  }, [preregistroItems, user?.rol, minoristaConsultaEsHoy]);
+      .map((i) => {
+        const cantidadEnTabla = Math.max(0, i.cantidad + i.aumento - i.cantidadRestante);
+        if (cantidadEnTabla <= 0) return null;
+        const yaRegistrada = registradasPorProducto.get(i.id_producto) || 0;
+        const cantidadPendiente = Math.max(0, cantidadEnTabla - yaRegistrada);
+        if (cantidadPendiente <= 0) return null;
+        return {
+          key: `borrador-${i.id}`,
+          nombre: i.nombre,
+          id_categoria: i.id_categoria,
+          cantidadVendida: cantidadPendiente,
+          precioUnitario: i.precio_unitario,
+          subtotal: cantidadPendiente * i.precio_unitario,
+        };
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== null);
+  }, [preregistroItems, user?.rol, minoristaConsultaEsHoy, lineasResumenVentasRegistradas]);
 
   const totalSubtotalBorradorPreregistro = useMemo(
     () => lineasResumenBorradorPreregistro.reduce((s, x) => s + x.subtotal, 0),
