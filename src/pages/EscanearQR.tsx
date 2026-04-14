@@ -55,6 +55,9 @@ export default function EscanearQR() {
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const autoScanCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const autoScanIntervalRef = useRef<number | null>(null);
+  const isAutoScanLockedRef = useRef(false);
 
   // Solo minoristas pueden acceder
   if (user?.rol !== 'minorista') {
@@ -133,6 +136,37 @@ export default function EscanearQR() {
     escanearQRMutation.mutate(codigoQR.trim());
   };
 
+  const handleValidarQRDirecto = async (codigo: string) => {
+    const normalizado = codigo.trim();
+    if (!normalizado) return;
+    setCodigoQR(normalizado);
+
+    if (user?.rol === 'minorista' && user.id) {
+      try {
+        const auto = await tryAutoFinalizarVentaMinoristaDiaAnterior(user.id);
+        if (auto.ok && auto.mode === 'done') {
+          toast.success(
+            `Se guardó la venta del ${formatDateOnlyLocal(auto.fechaCerrada)} que había quedado sin finalizar (cierre automático). Podés seguir con el día de hoy en Nueva venta.`
+          );
+          void queryClient.invalidateQueries({ queryKey: ['minorista-ultima-finalizada-preregistro'] });
+          void queryClient.invalidateQueries({ queryKey: ['pedidos-gate'] });
+          void queryClient.invalidateQueries({ queryKey: ['preregistro-resumen-ventas-dia'] });
+          void queryClient.invalidateQueries({ queryKey: ['minorista-hay-venta-nueva-venta-hoy'] });
+          void queryClient.invalidateQueries({ queryKey: [MINORISTA_JORNADA_DIARIA_QUERY_KEY] });
+          void queryClient.invalidateQueries({ queryKey: ['preregistros-minorista'] });
+          void refreshUserProfile();
+        } else if (!auto.ok) {
+          console.warn('Auto-cierre venta día anterior:', auto.message);
+        }
+      } catch (e: unknown) {
+        console.warn('Auto-cierre venta día anterior:', e);
+      }
+    }
+
+    setIsValidating(true);
+    escanearQRMutation.mutate(normalizado);
+  };
+
   const handleConfirmarTransferencia = () => {
     if (!transferenciaEncontrada) return;
 
@@ -194,6 +228,11 @@ export default function EscanearQR() {
   };
 
   const closeCamera = () => {
+    if (autoScanIntervalRef.current != null) {
+      window.clearInterval(autoScanIntervalRef.current);
+      autoScanIntervalRef.current = null;
+    }
+    isAutoScanLockedRef.current = false;
     if (cameraStream) {
       cameraStream.getTracks().forEach(track => track.stop());
       setCameraStream(null);
@@ -226,6 +265,54 @@ export default function EscanearQR() {
       };
     }
   }, [cameraStream, isCameraOpen]);
+
+  // Escaneo automático continuo desde cámara (sin capturar foto manualmente).
+  useEffect(() => {
+    if (!isCameraOpen || !cameraStream) return;
+    if (isValidating || escanearQRMutation.isPending || isProcessingImage) return;
+
+    if (!autoScanCanvasRef.current) {
+      autoScanCanvasRef.current = document.createElement('canvas');
+    }
+    const canvas = autoScanCanvasRef.current;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return;
+
+    if (autoScanIntervalRef.current != null) {
+      window.clearInterval(autoScanIntervalRef.current);
+      autoScanIntervalRef.current = null;
+    }
+
+    autoScanIntervalRef.current = window.setInterval(() => {
+      const video = videoRef.current;
+      if (!video || video.readyState < 2) return;
+      if (isAutoScanLockedRef.current) return;
+
+      const w = video.videoWidth;
+      const h = video.videoHeight;
+      if (!w || !h) return;
+
+      canvas.width = w;
+      canvas.height = h;
+      ctx.drawImage(video, 0, 0, w, h);
+
+      const frame = ctx.getImageData(0, 0, w, h);
+      const code = jsQR(frame.data, w, h);
+      if (!code?.data) return;
+
+      isAutoScanLockedRef.current = true;
+      closeCamera();
+      toast.success('Código QR detectado automáticamente');
+      void handleValidarQRDirecto(code.data);
+    }, 300);
+
+    return () => {
+      if (autoScanIntervalRef.current != null) {
+        window.clearInterval(autoScanIntervalRef.current);
+        autoScanIntervalRef.current = null;
+      }
+    };
+  }, [cameraStream, isCameraOpen, isProcessingImage, isValidating, escanearQRMutation.isPending]);
 
   const capturePhoto = async () => {
     if (!videoRef.current) return;
@@ -490,7 +577,7 @@ export default function EscanearQR() {
           <DialogHeader>
             <DialogTitle>Tomar Foto del Código QR</DialogTitle>
             <DialogDescription>
-              Asegúrate de que el código QR esté bien enfocado y visible
+              Enfoca el código QR. Se detecta automáticamente sin capturar foto.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -523,14 +610,6 @@ export default function EscanearQR() {
                 className="flex-1"
               >
                 Cancelar
-              </Button>
-              <Button
-                onClick={capturePhoto}
-                disabled={!cameraStream}
-                className="flex-1"
-              >
-                <Camera className="h-4 w-4 mr-2" />
-                Capturar Foto
               </Button>
             </div>
           </div>
