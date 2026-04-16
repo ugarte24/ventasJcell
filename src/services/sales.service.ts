@@ -338,17 +338,15 @@ export const salesService = {
   },
 
   async getById(id: string): Promise<Sale | null> {
+    // maybeSingle: 0 filas → null sin 406 (p. ej. RLS impide ver la venta de otro usuario).
     const { data, error } = await supabase
       .from('ventas')
       .select('*')
       .eq('id', id)
-      .single();
+      .maybeSingle();
 
-    if (error) {
-      if (error.code === 'PGRST116') return null;
-      throw new Error(handleSupabaseError(error));
-    }
-    return data as Sale;
+    if (error) throw new Error(handleSupabaseError(error));
+    return data as Sale | null;
   },
 
   async getDetails(id_venta: string): Promise<SaleDetail[]> {
@@ -543,12 +541,9 @@ export const salesService = {
       .from('ventas')
       .select('*')
       .eq('id', id)
-      .single();
+      .maybeSingle();
 
     if (ventaError) {
-      if (ventaError.code === 'PGRST116') {
-        throw new Error('Venta no encontrada');
-      }
       throw new Error(handleSupabaseError(ventaError));
     }
 
@@ -739,9 +734,10 @@ export const salesService = {
       })
       .eq('id', id)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) throw new Error(handleSupabaseError(error));
+    if (!data) throw new Error('Venta no encontrada o sin permiso para actualizarla');
 
     // El trigger recalculará automáticamente el interés
     return data as Sale;

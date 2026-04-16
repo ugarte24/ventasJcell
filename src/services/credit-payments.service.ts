@@ -43,13 +43,10 @@ export const creditPaymentsService = {
       .from('pagos_credito')
       .select('*')
       .eq('id', id)
-      .single();
+      .maybeSingle();
 
-    if (error) {
-      if (error.code === 'PGRST116') return null;
-      throw new Error(handleSupabaseError(error));
-    }
-    return data as CreditPayment;
+    if (error) throw new Error(handleSupabaseError(error));
+    return data as CreditPayment | null;
   },
 
   async create(paymentData: CreateCreditPaymentData): Promise<CreditPayment> {
@@ -58,7 +55,7 @@ export const creditPaymentsService = {
       .from('ventas')
       .select('total, total_con_interes, metodo_pago, monto_pagado, estado, meses_credito, cuota_inicial, tasa_interes, monto_interes')
       .eq('id', paymentData.id_venta)
-      .single();
+      .maybeSingle();
 
     if (ventaError) {
       throw new Error(`Error al verificar la venta: ${handleSupabaseError(ventaError)}`);
@@ -215,10 +212,13 @@ export const creditPaymentsService = {
       .from('pagos_credito')
       .select('id_venta')
       .eq('id', id)
-      .single();
+      .maybeSingle();
 
     if (pagoError) {
       throw new Error(`Error al obtener el pago: ${handleSupabaseError(pagoError)}`);
+    }
+    if (!pago) {
+      throw new Error('Pago no encontrado');
     }
 
     // Obtener datos de la venta para recalcular monto_pagado
@@ -226,7 +226,7 @@ export const creditPaymentsService = {
       .from('ventas')
       .select('total, total_con_interes, cuota_inicial, monto_interes, meses_credito')
       .eq('id', pago.id_venta)
-      .single();
+      .maybeSingle();
 
     const { error } = await supabase
       .from('pagos_credito')
@@ -288,7 +288,7 @@ export const creditPaymentsService = {
       .from('pagos_credito')
       .select('id_venta, monto_pagado')
       .eq('id', id)
-      .single();
+      .maybeSingle();
 
     if (pagoError) {
       throw new Error(`Error al obtener el pago: ${handleSupabaseError(pagoError)}`);
@@ -303,10 +303,14 @@ export const creditPaymentsService = {
       .from('ventas')
       .select('total, metodo_pago, estado')
       .eq('id', pagoActual.id_venta)
-      .single();
+      .maybeSingle();
 
     if (ventaError) {
       throw new Error(`Error al verificar la venta: ${handleSupabaseError(ventaError)}`);
+    }
+
+    if (!venta) {
+      throw new Error('Venta no encontrada');
     }
 
     if (venta.estado === 'anulada') {

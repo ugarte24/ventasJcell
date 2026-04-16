@@ -670,11 +670,6 @@ export default function EscanearQR() {
               <Package className="h-8 w-8 text-primary" />
             </div>
             <DialogTitle className="text-center">Recibir saldos por QR</DialogTitle>
-            <DialogDescription className="text-center">
-              Solo se muestra el <strong>saldo</strong> por producto. Si tocás <strong>Aceptar</strong>, ese valor se
-              guarda en tu preregistro como <strong>cantidad</strong> y como <strong>saldo</strong> (cantidad
-              restante), reemplazando esa línea, y se abre <strong>Nueva venta</strong>.
-            </DialogDescription>
           </DialogHeader>
           {transferenciaEncontrada && (
             <div className="space-y-4 py-4">
