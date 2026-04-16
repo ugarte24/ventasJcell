@@ -176,6 +176,8 @@ export interface TransferenciaSaldo {
   fecha_transferencia: string;
   fecha_escaneo?: string;
   estado: 'pendiente' | 'completada' | 'expirada' | 'cancelada';
+  /** Si existe en BD: ya se aplicaron saldos al preregistro del destino (RPC). */
+  preregistro_destino_aplicado?: boolean;
   created_at: string;
   updated_at: string;
   // Datos relacionados

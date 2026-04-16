@@ -11,6 +11,37 @@ const generateQRCode = (): string => {
   return `TRF-${timestamp}-${random}`.toUpperCase();
 };
 
+async function enrichSaldosTransferidosConNombres(
+  saldos: unknown
+): Promise<unknown> {
+  if (!Array.isArray(saldos) || saldos.length === 0) return saldos;
+
+  type SaldoLike = { id_producto?: string; cantidad_restante?: number; nombre?: string };
+  const rows = saldos as SaldoLike[];
+  const ids = Array.from(
+    new Set(
+      rows
+        .map((s) => (typeof s.id_producto === 'string' ? s.id_producto : ''))
+        .filter((id) => id.length > 0)
+    )
+  );
+
+  if (!ids.length) return saldos;
+
+  const { data, error } = await supabase
+    .from('productos')
+    .select('id, nombre')
+    .in('id', ids);
+
+  if (error || !data?.length) return saldos;
+
+  const nombrePorId = new Map<string, string>(data.map((p) => [p.id, p.nombre]));
+  return rows.map((s) => ({
+    ...s,
+    nombre: s.nombre || (s.id_producto ? nombrePorId.get(s.id_producto) : undefined),
+  }));
+}
+
 function ventaOrdenTimestamp(venta: Sale & { created_at?: string }): number {
   if (venta.created_at) {
     const t = new Date(venta.created_at).getTime();
@@ -23,6 +54,80 @@ function ventaOrdenTimestamp(venta: Sale & { created_at?: string }): number {
   const mm = parseInt(parts[1] ?? '0', 10);
   d.setHours(Number.isFinite(hh) ? hh : 0, Number.isFinite(mm) ? mm : 0, 0, 0);
   return d.getTime();
+}
+
+type TransferenciaRow = Record<string, unknown>;
+
+async function cargarTransferenciaSaldoEnriquecida(
+  row: TransferenciaRow
+): Promise<TransferenciaSaldo> {
+  const [ventaOrigen, minoristaOrigen, minoristaDestino] = await Promise.all([
+    salesService.getById(String(row.id_venta_origen)),
+    usersService.getById(String(row.id_minorista_origen)),
+    row.id_minorista_destino ? usersService.getById(String(row.id_minorista_destino)) : null,
+  ]);
+
+  const saldosConNombres = await enrichSaldosTransferidosConNombres(row.saldos_transferidos);
+
+  return {
+    ...(row as unknown as TransferenciaSaldo),
+    saldos_transferidos: saldosConNombres as TransferenciaSaldo['saldos_transferidos'],
+    venta_origen: ventaOrigen || undefined,
+    minorista_origen: minoristaOrigen || undefined,
+    minorista_destino: minoristaDestino || undefined,
+  } as TransferenciaSaldo;
+}
+
+/**
+ * Busca transferencia pendiente por código y valida que el destino pueda recibirla.
+ * No modifica la base de datos.
+ */
+async function resolverTransferenciaPendientePorCodigo(
+  codigoQR: string,
+  idMinoristaDestino: string
+): Promise<TransferenciaRow> {
+  const codigoNormalizado = codigoQR.trim().replace(/\s+/g, '').toUpperCase();
+  if (!codigoNormalizado) {
+    throw new Error('Código QR no válido o transferencia ya procesada');
+  }
+
+  const { data: transferencia, error: findError } = await supabase
+    .from('transferencias_saldos')
+    .select('*')
+    .eq('codigo_qr', codigoNormalizado)
+    .eq('estado', 'pendiente')
+    .single();
+
+  if (findError) {
+    if (findError.code !== 'PGRST116') {
+      throw new Error(handleSupabaseError(findError));
+    }
+    throw new Error('Código QR no válido o transferencia ya procesada');
+  }
+
+  if (!transferencia) {
+    throw new Error('Código QR no válido o transferencia ya procesada');
+  }
+
+  if (transferencia.id_minorista_origen === idMinoristaDestino) {
+    throw new Error('No puedes escanear tu propio código QR');
+  }
+
+  const { data: ultimaPendienteOrigen, error: ultPendErr } = await supabase
+    .from('transferencias_saldos')
+    .select('id')
+    .eq('id_minorista_origen', transferencia.id_minorista_origen)
+    .eq('estado', 'pendiente')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (ultPendErr) throw new Error(handleSupabaseError(ultPendErr));
+  if (ultimaPendienteOrigen && ultimaPendienteOrigen.id !== transferencia.id) {
+    throw new Error('El código QR no corresponde a la última transferencia pendiente del minorista');
+  }
+
+  return transferencia as TransferenciaRow;
 }
 
 export const transferenciasService = {
@@ -70,59 +175,29 @@ export const transferenciasService = {
   },
 
   // ============================================================================
-  // ESCANEAR QR (COMPLETAR TRANSFERENCIA)
+  // ESCANEAR QR: vista previa (pendiente) y completar
   // ============================================================================
 
-  async escanearQR(
+  /**
+   * Solo lectura + validaciones: muestra saldos al destino antes de aceptar.
+   */
+  async previewTransferenciaQR(
     codigoQR: string,
     idMinoristaDestino: string
   ): Promise<TransferenciaSaldo> {
-    const codigoNormalizado = codigoQR.trim().replace(/\s+/g, '').toUpperCase();
-    if (!codigoNormalizado) {
-      throw new Error('Código QR no válido o transferencia ya procesada');
-    }
+    const row = await resolverTransferenciaPendientePorCodigo(codigoQR, idMinoristaDestino);
+    return cargarTransferenciaSaldoEnriquecida(row);
+  },
 
-    // Buscar transferencia por código QR
-    const { data: transferencia, error: findError } = await supabase
-      .from('transferencias_saldos')
-      .select('*')
-      .eq('codigo_qr', codigoNormalizado)
-      .eq('estado', 'pendiente')
-      .single();
+  /**
+   * Completa la transferencia (asigna destino, estado completada). Revalida en servidor.
+   */
+  async completarTransferenciaQR(
+    codigoQR: string,
+    idMinoristaDestino: string
+  ): Promise<TransferenciaSaldo> {
+    const transferencia = await resolverTransferenciaPendientePorCodigo(codigoQR, idMinoristaDestino);
 
-    if (findError) {
-      if (findError.code !== 'PGRST116') {
-        throw new Error(handleSupabaseError(findError));
-      }
-      throw new Error('Código QR no válido o transferencia ya procesada');
-    }
-
-    if (!transferencia) {
-      throw new Error('Código QR no válido o transferencia ya procesada');
-    }
-
-    // Verificar que no sea el mismo minorista
-    if (transferencia.id_minorista_origen === idMinoristaDestino) {
-      throw new Error('No puedes escanear tu propio código QR');
-    }
-
-    // Verificar que este QR corresponda a la transferencia pendiente más reciente del origen.
-    // Esto evita falsos "QR no válido" por restricciones de lectura (RLS) sobre tabla `ventas`.
-    const { data: ultimaPendienteOrigen, error: ultPendErr } = await supabase
-      .from('transferencias_saldos')
-      .select('id')
-      .eq('id_minorista_origen', transferencia.id_minorista_origen)
-      .eq('estado', 'pendiente')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (ultPendErr) throw new Error(handleSupabaseError(ultPendErr));
-    if (ultimaPendienteOrigen && ultimaPendienteOrigen.id !== transferencia.id) {
-      throw new Error('El código QR no corresponde a la última transferencia pendiente del minorista');
-    }
-
-    // Actualizar transferencia
     const fechaEscaneo = getLocalDateTimeISO();
     const updatedAt = getLocalDateTimeISO();
 
@@ -134,24 +209,21 @@ export const transferenciasService = {
         estado: 'completada',
         updated_at: updatedAt,
       })
-      .eq('id', transferencia.id)
+      .eq('id', transferencia.id as string)
       .select()
       .single();
 
     if (updateError) throw new Error(handleSupabaseError(updateError));
 
-    const [ventaOrigen, minoristaOrigen, minoristaDestino] = await Promise.all([
-      salesService.getById(updated.id_venta_origen),
-      usersService.getById(updated.id_minorista_origen),
-      usersService.getById(updated.id_minorista_destino),
-    ]);
+    return cargarTransferenciaSaldoEnriquecida(updated as TransferenciaRow);
+  },
 
-    return {
-      ...updated,
-      venta_origen: ventaOrigen || undefined,
-      minorista_origen: minoristaOrigen || undefined,
-      minorista_destino: minoristaDestino || undefined,
-    } as TransferenciaSaldo;
+  /** @deprecated Usar previewTransferenciaQR + completarTransferenciaQR + aplicar preregistro */
+  async escanearQR(
+    codigoQR: string,
+    idMinoristaDestino: string
+  ): Promise<TransferenciaSaldo> {
+    return this.completarTransferenciaQR(codigoQR, idMinoristaDestino);
   },
 
   // ============================================================================
@@ -316,4 +388,3 @@ export const transferenciasService = {
     if (error) throw new Error(handleSupabaseError(error));
   },
 };
-

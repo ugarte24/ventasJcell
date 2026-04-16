@@ -214,6 +214,22 @@ export const preregistrosService = {
     if (error) throw new Error(handleSupabaseError(error));
   },
 
+  /**
+   * Tras aceptar el QR: por cada producto, el saldo transferido del origen queda como
+   * `cantidad` y `cantidad_restante` del destino (reemplazo en esa línea de preregistro).
+   * Requiere en Supabase la migración `rpc_apply_transferencia_preregistro_destino_minorista.sql`.
+   */
+  async applyTransferenciaPreregistroDestino(
+    transferenciaId: string,
+    fechaLocalISO: string
+  ): Promise<void> {
+    const { error } = await supabase.rpc('apply_transferencia_preregistro_destino_minorista', {
+      p_transferencia_id: transferenciaId,
+      p_fecha: fechaLocalISO,
+    });
+    if (error) throw new Error(handleSupabaseError(error));
+  },
+
   /** Saldo restante para mayorista (RLS permite actualizar filas propias). */
   async updateCantidadRestanteMayorista(
     preregistroId: string,

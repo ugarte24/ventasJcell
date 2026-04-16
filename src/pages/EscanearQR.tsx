@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,21 +13,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { 
-  QrCode, 
-  Scan, 
-  CheckCircle, 
-  XCircle, 
+import {
+  QrCode,
+  Scan,
   Loader,
   Copy,
   AlertCircle,
   Camera,
   Image as ImageIcon,
-  X
+  X,
+  Package,
 } from 'lucide-react';
 import { useAuth } from '@/contexts';
 import { toast } from 'sonner';
 import { transferenciasService } from '@/services/transferencias.service';
+import { preregistrosService } from '@/services/preregistros.service';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { getLocalDateISO, formatDateOnlyLocal } from '@/lib/utils';
 import {
@@ -36,11 +37,10 @@ import {
 import { tryAutoFinalizarVentaMinoristaDiaAnterior } from '@/services/minorista-auto-finalizar-dia-anterior.service';
 import { TransferenciaSaldo } from '@/types';
 import { Badge } from '@/components/ui/badge';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import jsQR from 'jsqr';
 
 export default function EscanearQR() {
+  const navigate = useNavigate();
   const { user, refreshUserProfile } = useAuth();
   const queryClient = useQueryClient();
   const [codigoQR, setCodigoQR] = useState('');
@@ -70,15 +70,40 @@ export default function EscanearQR() {
     );
   }
 
-  // Mutación para escanear QR
-  const escanearQRMutation = useMutation({
+  /** Solo valida y muestra vista previa (transferencia sigue pendiente). */
+  const previewTransferenciaMutation = useMutation({
     mutationFn: async (codigo: string) => {
       if (!user) throw new Error('Usuario no autenticado');
-      return await transferenciasService.escanearQR(codigo, user.id);
+      return await transferenciasService.previewTransferenciaQR(codigo, user.id);
     },
     onSuccess: async (transferencia) => {
       setTransferenciaEncontrada(transferencia);
       setShowConfirmDialog(true);
+      queryClient.invalidateQueries({ queryKey: ['minorista-transfer-qr-consulta-dia'] });
+      setIsValidating(false);
+    },
+    onError: (error: unknown) => {
+      toast.error(error instanceof Error ? error.message : 'Error al validar el código QR');
+      setIsValidating(false);
+    },
+  });
+
+  /** Completa la transferencia, copia saldos al preregistro del destino y redirige a Nueva venta. */
+  const aceptarTransferenciaMutation = useMutation({
+    mutationFn: async (codigo: string) => {
+      if (!user) throw new Error('Usuario no autenticado');
+      const t = await transferenciasService.completarTransferenciaQR(codigo, user.id);
+      try {
+        await preregistrosService.applyTransferenciaPreregistroDestino(t.id, getLocalDateISO());
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Error al aplicar saldos al preregistro';
+        throw new Error(
+          `${msg}. La transferencia quedó registrada como completada; si falta la función en la base de datos, ejecutá la migración rpc_apply_transferencia_preregistro_destino_minorista.sql en Supabase.`
+        );
+      }
+      return t;
+    },
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ['transferencias-saldos'] });
       queryClient.invalidateQueries({ queryKey: ['preregistros-minorista'] });
       queryClient.invalidateQueries({ queryKey: ['minorista-transfer-qr-consulta-dia'] });
@@ -97,10 +122,16 @@ export default function EscanearQR() {
         await queryClient.invalidateQueries({ queryKey: [MINORISTA_JORNADA_DIARIA_QUERY_KEY] });
         queryClient.invalidateQueries({ queryKey: ['pedidos-gate'] });
       }
+      setShowConfirmDialog(false);
+      setCodigoQR('');
+      setTransferenciaEncontrada(null);
+      toast.success(
+        'Saldos aceptados: en cada producto tu cantidad y saldo quedaron iguales al saldo transferido. Abrimos Nueva venta.'
+      );
+      navigate('/ventas/nueva');
     },
-    onError: (error: any) => {
-      toast.error(error.message || 'Error al escanear el código QR');
-      setIsValidating(false);
+    onError: (error: unknown) => {
+      toast.error(error instanceof Error ? error.message : 'No se pudo completar la transferencia');
     },
   });
 
@@ -133,7 +164,7 @@ export default function EscanearQR() {
     }
 
     setIsValidating(true);
-    escanearQRMutation.mutate(codigoQR.trim().replace(/\s+/g, '').toUpperCase());
+    previewTransferenciaMutation.mutate(codigoQR.trim().replace(/\s+/g, '').toUpperCase());
   };
 
   const handleValidarQRDirecto = async (codigo: string) => {
@@ -164,18 +195,19 @@ export default function EscanearQR() {
     }
 
     setIsValidating(true);
-    escanearQRMutation.mutate(normalizado);
+    previewTransferenciaMutation.mutate(normalizado);
   };
 
-  const handleConfirmarTransferencia = () => {
-    if (!transferenciaEncontrada) return;
+  const handleAceptarTransferencia = () => {
+    const c = transferenciaEncontrada?.codigo_qr?.trim().replace(/\s+/g, '').toUpperCase();
+    if (!c) return;
+    aceptarTransferenciaMutation.mutate(c);
+  };
 
-    // La transferencia ya se completó al escanear, solo cerramos el diálogo
-    toast.success('Saldos restantes recibidos exitosamente');
+  const handleCancelarVistaPrevia = () => {
+    if (aceptarTransferenciaMutation.isPending) return;
     setShowConfirmDialog(false);
-    setCodigoQR('');
     setTransferenciaEncontrada(null);
-    setIsValidating(false);
   };
 
   const handlePegarCodigo = async () => {
@@ -269,7 +301,7 @@ export default function EscanearQR() {
   // Escaneo automático continuo desde cámara (sin capturar foto manualmente).
   useEffect(() => {
     if (!isCameraOpen || !cameraStream) return;
-    if (isValidating || escanearQRMutation.isPending || isProcessingImage) return;
+    if (isValidating || previewTransferenciaMutation.isPending || isProcessingImage) return;
 
     if (!autoScanCanvasRef.current) {
       autoScanCanvasRef.current = document.createElement('canvas');
@@ -312,7 +344,7 @@ export default function EscanearQR() {
         autoScanIntervalRef.current = null;
       }
     };
-  }, [cameraStream, isCameraOpen, isProcessingImage, isValidating, escanearQRMutation.isPending]);
+  }, [cameraStream, isCameraOpen, isProcessingImage, isValidating, previewTransferenciaMutation.isPending]);
 
   const capturePhoto = async () => {
     if (!videoRef.current) return;
@@ -434,8 +466,11 @@ export default function EscanearQR() {
                   <li>Ingresar o pegar el código manualmente</li>
                 </ul>
               </li>
-              <li>El sistema validará que el código corresponda a la última venta del minorista</li>
-              <li>Una vez validado, recibirás los saldos restantes en tus preregistros</li>
+              <li>El sistema validará que el código corresponda a la última transferencia pendiente del minorista</li>
+              <li>
+                Verás los saldos en pantalla: solo se copian a tu preregistro si tocás <strong>Aceptar</strong>; después
+                te llevamos a <strong>Nueva venta</strong>
+              </li>
             </ol>
           </CardContent>
         </Card>
@@ -458,12 +493,12 @@ export default function EscanearQR() {
                   value={codigoQR}
                   onChange={(e) => setCodigoQR(e.target.value.toUpperCase())}
                   className="font-mono text-sm"
-                  disabled={isValidating || escanearQRMutation.isPending || isProcessingImage}
+                  disabled={isValidating || previewTransferenciaMutation.isPending || isProcessingImage}
                 />
                 <Button
                   variant="outline"
                   onClick={handlePegarCodigo}
-                  disabled={isValidating || escanearQRMutation.isPending || isProcessingImage}
+                  disabled={isValidating || previewTransferenciaMutation.isPending || isProcessingImage}
                 >
                   <Copy className="h-4 w-4 mr-2" />
                   Pegar
@@ -479,7 +514,7 @@ export default function EscanearQR() {
               <Button
                 variant="outline"
                 onClick={openCamera}
-                disabled={isValidating || escanearQRMutation.isPending || isProcessingImage || isCameraOpen}
+                disabled={isValidating || previewTransferenciaMutation.isPending || isProcessingImage || isCameraOpen}
                 className="w-full"
               >
                 <Camera className="h-4 w-4 mr-2" />
@@ -488,7 +523,7 @@ export default function EscanearQR() {
               <Button
                 variant="outline"
                 onClick={handleSelectFromGallery}
-                disabled={isValidating || escanearQRMutation.isPending || isProcessingImage || isCameraOpen}
+                disabled={isValidating || previewTransferenciaMutation.isPending || isProcessingImage || isCameraOpen}
                 className="w-full"
               >
                 <ImageIcon className="h-4 w-4 mr-2" />
@@ -537,9 +572,9 @@ export default function EscanearQR() {
             <Button
               className="w-full"
               onClick={handleValidarQR}
-              disabled={!codigoQR.trim() || isValidating || escanearQRMutation.isPending || isProcessingImage}
+              disabled={!codigoQR.trim() || isValidating || previewTransferenciaMutation.isPending || isProcessingImage}
             >
-              {isValidating || escanearQRMutation.isPending ? (
+              {isValidating || previewTransferenciaMutation.isPending ? (
                 <>
                   <Loader className="h-4 w-4 mr-2 animate-spin" />
                   Validando...
@@ -616,61 +651,122 @@ export default function EscanearQR() {
         </DialogContent>
       </Dialog>
 
-      {/* Confirmación Dialog */}
-      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+      {/* Vista previa: saldos antes de aceptar la transferencia */}
+      <Dialog
+        open={showConfirmDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            if (aceptarTransferenciaMutation.isPending) return;
+            setShowConfirmDialog(false);
+            setTransferenciaEncontrada(null);
+          } else {
+            setShowConfirmDialog(true);
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-success/10">
-              <CheckCircle className="h-8 w-8 text-success" />
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+              <Package className="h-8 w-8 text-primary" />
             </div>
-            <DialogTitle className="text-center">Transferencia Exitosa</DialogTitle>
+            <DialogTitle className="text-center">Recibir saldos por QR</DialogTitle>
             <DialogDescription className="text-center">
-              Los saldos restantes han sido transferidos correctamente
+              Revisá los saldos que te transfiere otro minorista. Si estás de acuerdo, tocá{' '}
+              <strong>Aceptar</strong> para que cada saldo del origen quede como tu{' '}
+              <strong>cantidad</strong> y <strong>saldo</strong> (cantidad restante) en el preregistro —reemplazando
+              ese producto en tu lista— y abrir <strong>Nueva venta</strong>.
             </DialogDescription>
           </DialogHeader>
           {transferenciaEncontrada && (
             <div className="space-y-4 py-4">
               <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Minorista Origen:</span>
-                  <span className="font-medium">{transferenciaEncontrada.minorista_origen?.nombre || 'N/A'}</span>
+                <div className="flex justify-between items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Minorista origen</span>
+                  <span className="font-medium text-right">
+                    {transferenciaEncontrada.minorista_origen?.nombre || 'N/A'}
+                  </span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Fecha de Transferencia:</span>
-                  <span className="font-medium">
-                    {format(new Date(transferenciaEncontrada.fecha_transferencia), 'dd/MM/yyyy HH:mm', { locale: es })}
+                {transferenciaEncontrada.venta_origen?.fecha && (
+                  <div className="flex justify-between items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Venta origen (fecha)</span>
+                    <span className="font-medium text-right">
+                      {formatDateOnlyLocal(
+                        String(transferenciaEncontrada.venta_origen.fecha).split('T')[0]
+                      )}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Código</span>
+                  <span className="font-mono text-xs break-all text-right">
+                    {transferenciaEncontrada.codigo_qr}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Estado:</span>
-                  <Badge className="bg-success text-success-foreground">Completada</Badge>
+                  <span className="text-sm text-muted-foreground">Estado</span>
+                  <Badge variant="secondary" className="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-100">
+                    Pendiente de tu aceptación
+                  </Badge>
                 </div>
               </div>
 
               <div className="border-t pt-4">
-                <p className="text-sm font-medium mb-2">Saldos Restantes Recibidos:</p>
-                <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                  {Array.isArray(transferenciaEncontrada.saldos_transferidos) && transferenciaEncontrada.saldos_transferidos.length > 0 ? (
-                    transferenciaEncontrada.saldos_transferidos.map((saldo: any, index: number) => (
-                      <div key={index} className="flex justify-between items-center p-2 bg-muted rounded">
-                        <span className="text-sm">
-                          {saldo.nombre || `Producto ${index + 1}`}
-                        </span>
-                        <Badge variant="outline">
-                          {saldo.cantidad_restante} unidades
-                        </Badge>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No hay saldos para mostrar</p>
-                  )}
+                <p className="text-sm font-medium mb-2">Saldo del origen → tu cantidad y saldo</p>
+                <div className="rounded-md border overflow-hidden">
+                  <div className="grid grid-cols-[1fr_auto_auto] gap-2 bg-muted/80 px-3 py-2 text-xs font-medium">
+                    <span>Producto</span>
+                    <span className="text-right">Cantidad</span>
+                    <span className="text-right">Saldo</span>
+                  </div>
+                  <div className="max-h-[220px] overflow-y-auto divide-y">
+                    {Array.isArray(transferenciaEncontrada.saldos_transferidos) &&
+                    transferenciaEncontrada.saldos_transferidos.length > 0 ? (
+                      transferenciaEncontrada.saldos_transferidos.map((saldo: any, index: number) => {
+                        const n = Number(saldo.cantidad_restante);
+                        const unidades = Number.isFinite(n) ? n : 0;
+                        return (
+                          <div
+                            key={index}
+                            className="grid grid-cols-[1fr_auto_auto] gap-2 px-3 py-2 items-center text-sm"
+                          >
+                            <span>{saldo.nombre || `Producto ${index + 1}`}</span>
+                            <span className="text-right tabular-nums">{unidades}</span>
+                            <span className="text-right tabular-nums">{unidades}</span>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <p className="text-sm text-muted-foreground p-3">No hay saldos para mostrar</p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
           )}
-          <DialogFooter>
-            <Button onClick={handleConfirmarTransferencia} className="w-full">
-              Continuar
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:flex-1"
+              disabled={aceptarTransferenciaMutation.isPending}
+              onClick={handleCancelarVistaPrevia}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              className="w-full sm:flex-1"
+              disabled={aceptarTransferenciaMutation.isPending || !transferenciaEncontrada?.codigo_qr}
+              onClick={handleAceptarTransferencia}
+            >
+              {aceptarTransferenciaMutation.isPending ? (
+                <>
+                  <Loader className="mr-2 h-4 w-4 animate-spin" />
+                  Aplicando…
+                </>
+              ) : (
+                'Aceptar'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
