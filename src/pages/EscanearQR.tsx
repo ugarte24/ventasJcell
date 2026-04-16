@@ -671,10 +671,9 @@ export default function EscanearQR() {
             </div>
             <DialogTitle className="text-center">Recibir saldos por QR</DialogTitle>
             <DialogDescription className="text-center">
-              Revisá los saldos que te transfiere otro minorista. Si estás de acuerdo, tocá{' '}
-              <strong>Aceptar</strong> para que cada saldo del origen quede como tu{' '}
-              <strong>cantidad</strong> y <strong>saldo</strong> (cantidad restante) en el preregistro —reemplazando
-              ese producto en tu lista— y abrir <strong>Nueva venta</strong>.
+              Solo se muestra el <strong>saldo</strong> por producto. Si tocás <strong>Aceptar</strong>, ese valor se
+              guarda en tu preregistro como <strong>cantidad</strong> y como <strong>saldo</strong> (cantidad
+              restante), reemplazando esa línea, y se abre <strong>Nueva venta</strong>.
             </DialogDescription>
           </DialogHeader>
           {transferenciaEncontrada && (
@@ -711,11 +710,10 @@ export default function EscanearQR() {
               </div>
 
               <div className="border-t pt-4">
-                <p className="text-sm font-medium mb-2">Saldo del origen → tu cantidad y saldo</p>
+                <p className="text-sm font-medium mb-2">Producto y saldo a recibir</p>
                 <div className="rounded-md border overflow-hidden">
-                  <div className="grid grid-cols-[1fr_auto_auto] gap-2 bg-muted/80 px-3 py-2 text-xs font-medium">
+                  <div className="grid grid-cols-[1fr_auto] gap-2 bg-muted/80 px-3 py-2 text-xs font-medium">
                     <span>Producto</span>
-                    <span className="text-right">Cantidad</span>
                     <span className="text-right">Saldo</span>
                   </div>
                   <div className="max-h-[220px] overflow-y-auto divide-y">
@@ -727,11 +725,10 @@ export default function EscanearQR() {
                         return (
                           <div
                             key={index}
-                            className="grid grid-cols-[1fr_auto_auto] gap-2 px-3 py-2 items-center text-sm"
+                            className="grid grid-cols-[1fr_auto] gap-2 px-3 py-2 items-center text-sm"
                           >
                             <span>{saldo.nombre || `Producto ${index + 1}`}</span>
-                            <span className="text-right tabular-nums">{unidades}</span>
-                            <span className="text-right tabular-nums">{unidades}</span>
+                            <span className="text-right tabular-nums font-medium">{unidades}</span>
                           </div>
                         );
                       })
