@@ -635,18 +635,13 @@ export default function NewSale() {
           // Cargar aumentos del día consultado desde ventas_minoristas
           const aumentosDelDia = await ventasMinoristasService.getAumentosDelDia(user.id, fechaActual);
 
-          const ventasDelDiaHistorial =
-            fechaActual !== hoyISO
-              ? await ventasMinoristasService.getVentasDelDia(user.id, fechaActual)
-              : [];
+          const ventasDelDia = await ventasMinoristasService.getVentasDelDia(user.id, fechaActual);
 
           const vendidoPorProducto = new Map<string, number>();
-          if (fechaActual !== hoyISO) {
-            ventasDelDiaHistorial.forEach((v) => {
-              const prev = vendidoPorProducto.get(v.id_producto) || 0;
-              vendidoPorProducto.set(v.id_producto, prev + (v.cantidad_vendida || 0));
-            });
-          }
+          ventasDelDia.forEach((v) => {
+            const prev = vendidoPorProducto.get(v.id_producto) || 0;
+            vendidoPorProducto.set(v.id_producto, prev + (v.cantidad_vendida || 0));
+          });
 
           // Crear un mapa de aumentos por producto
           const aumentosPorProducto = new Map<string, number>();
@@ -657,17 +652,25 @@ export default function NewSale() {
 
           const items: PreregistroVentaItem[] = preregistros.map((p) => {
             const aumento = aumentosPorProducto.get(p.id_producto) || 0;
-            const vendido = fechaActual !== hoyISO ? vendidoPorProducto.get(p.id_producto) || 0 : 0;
+            const vendido = vendidoPorProducto.get(p.id_producto) || 0;
             const saldoDisponible = p.cantidad + aumento;
+            const baseRemainder = Math.max(0, saldoDisponible - vendido);
 
             let cantidadRestante: number;
             if (fechaActual !== hoyISO) {
-              cantidadRestante = Math.max(0, saldoDisponible - vendido);
+              cantidadRestante = baseRemainder;
             } else if (p.cantidad_restante != null && !Number.isNaN(Number(p.cantidad_restante))) {
-              cantidadRestante = Math.max(0, Math.min(Number(p.cantidad_restante), saldoDisponible));
+              const persisted = Number(p.cantidad_restante);
+              // Si en BD el saldo sigue igual al preregistro base pero ya hubo aumentos por pedido
+              // y aún no hay ventas registradas, Math.min(persistido, saldo) dejaba el saldo bajo.
+              if (vendido === 0 && aumento > 0 && persisted === p.cantidad) {
+                cantidadRestante = baseRemainder;
+              } else {
+                cantidadRestante = Math.max(0, Math.min(persisted, saldoDisponible));
+              }
             } else {
               // Solo BD: sin fallback localStorage (la columna/RPC debe existir en Supabase)
-              cantidadRestante = saldoDisponible;
+              cantidadRestante = baseRemainder;
             }
             
             return {
@@ -706,6 +709,17 @@ export default function NewSale() {
             const actual = aumentosPorProducto.get(aumento.id_producto) || 0;
             aumentosPorProducto.set(aumento.id_producto, actual + aumento.cantidad_aumento);
           });
+
+          const ventasDelDiaMayorista = await ventasMayoristasService.getVentasDelPeriodo(
+            user.id,
+            fechaActual,
+            fechaActual
+          );
+          const vendidoPorProductoMayorista = new Map<string, number>();
+          ventasDelDiaMayorista.forEach((v) => {
+            const prev = vendidoPorProductoMayorista.get(v.id_producto) || 0;
+            vendidoPorProductoMayorista.set(v.id_producto, prev + (v.cantidad_vendida || 0));
+          });
           
           // Obtener último arqueo cerrado para calcular saldos arrastrados
           // TODO: Implementar cuando tengamos el servicio de arqueos
@@ -714,12 +728,19 @@ export default function NewSale() {
           const items: PreregistroVentaItem[] = preregistros.map(p => {
             const aumento = aumentosPorProducto.get(p.id_producto) || 0;
             const saldoDisponible = p.cantidad + aumento; // TODO: Sumar saldos arrastrados del último arqueo
+            const vendido = vendidoPorProductoMayorista.get(p.id_producto) || 0;
+            const baseRemainder = Math.max(0, saldoDisponible - vendido);
 
             let cantidadRestante: number;
             if (p.cantidad_restante != null && !Number.isNaN(Number(p.cantidad_restante))) {
-              cantidadRestante = Math.max(0, Math.min(Number(p.cantidad_restante), saldoDisponible));
+              const persisted = Number(p.cantidad_restante);
+              if (vendido === 0 && aumento > 0 && persisted === p.cantidad) {
+                cantidadRestante = baseRemainder;
+              } else {
+                cantidadRestante = Math.max(0, Math.min(persisted, saldoDisponible));
+              }
             } else {
-              cantidadRestante = saldoDisponible;
+              cantidadRestante = baseRemainder;
             }
             
             return {
