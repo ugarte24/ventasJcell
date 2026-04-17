@@ -212,6 +212,43 @@ export const ventasMinoristasService = {
     });
   },
 
+  /**
+   * Suma por producto las cantidades vendidas en una fecha (líneas con cantidad_vendida > 0).
+   * Sirve para armar un pedido que, al entregarse, registre aumentos equivalentes a lo vendido.
+   */
+  async getCantidadesVendidasAgregadasPorProductoDia(
+    idMinorista: string,
+    fechaISO: string
+  ): Promise<Array<{ id_producto: string; cantidad: number }>> {
+    const rows = await this.getVentasDelDia(idMinorista, fechaISO);
+    const map = new Map<string, number>();
+    for (const v of rows) {
+      const q = Number(v.cantidad_vendida);
+      if (!Number.isFinite(q) || q <= 0) continue;
+      map.set(v.id_producto, (map.get(v.id_producto) || 0) + q);
+    }
+    return Array.from(map.entries()).map(([id_producto, cantidad]) => ({ id_producto, cantidad }));
+  },
+
+  /**
+   * Minorista **destino**: cantidades vendidas del **origen** según la venta ligada al QR
+   * (`ventas.fecha` de `id_venta_origen`), no necesariamente el mismo día que `fechaISO`.
+   * `fechaISO` solo elige la transferencia completada cuyo escaneo cae en ese día (vía RPC).
+   */
+  async getCantidadesVendidasOrigenTransferDestinoDia(
+    fechaISO: string
+  ): Promise<Array<{ id_producto: string; cantidad: number }>> {
+    const { data, error } = await supabase.rpc('cantidades_vendidas_origen_transfer_destino', {
+      p_fecha: fechaISO,
+    });
+    if (error) throw new Error(handleSupabaseError(error));
+    const rows = (data ?? []) as Array<{ id_producto: string; cantidad: number | string }>;
+    return rows.map((r) => ({
+      id_producto: String(r.id_producto),
+      cantidad: Number(r.cantidad) || 0,
+    }));
+  },
+
   /** Líneas creadas al finalizar desde Nueva venta (preregistro), para inferir cierre del día aunque falle el flag en usuarios. */
   async hasVentaRegistradaDesdeNuevaVentaEnFecha(
     idMinorista: string,

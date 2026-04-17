@@ -121,14 +121,15 @@ export default function EscanearQR() {
         }
         await queryClient.invalidateQueries({ queryKey: [MINORISTA_JORNADA_DIARIA_QUERY_KEY] });
         queryClient.invalidateQueries({ queryKey: ['pedidos-gate'] });
+        void queryClient.invalidateQueries({ queryKey: ['transferencia-completar-saldos-pendiente'] });
       }
       setShowConfirmDialog(false);
       setCodigoQR('');
       setTransferenciaEncontrada(null);
       toast.success(
-        'Saldos aceptados: en cada producto tu cantidad y saldo quedaron iguales al saldo transferido. Abrimos Nueva venta.'
+        'Saldos aceptados: tu cantidad y saldo quedaron alineados con la transferencia. Abrimos Nueva venta; después en Pedidos podés usar Completar saldos en el nuevo pedido para que al entregarlo sea aumento.'
       );
-      navigate('/ventas/nueva');
+      navigate('/ventas/nueva', { state: { fromQrTransfer: true } });
     },
     onError: (error: unknown) => {
       toast.error(error instanceof Error ? error.message : 'No se pudo completar la transferencia');

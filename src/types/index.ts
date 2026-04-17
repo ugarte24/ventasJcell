@@ -178,6 +178,8 @@ export interface TransferenciaSaldo {
   estado: 'pendiente' | 'completada' | 'expirada' | 'cancelada';
   /** Si existe en BD: ya se aplicaron saldos al preregistro del destino (RPC). */
   preregistro_destino_aplicado?: boolean;
+  /** Destino: ya creó el pedido desde Completar saldos para esta transferencia. */
+  pedido_completar_saldos_origen_aplicado?: boolean;
   created_at: string;
   updated_at: string;
   // Datos relacionados

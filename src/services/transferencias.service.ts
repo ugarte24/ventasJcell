@@ -376,6 +376,78 @@ export const transferenciasService = {
     } as TransferenciaSaldo;
   },
 
+  /**
+   * True si el minorista completó al menos una transferencia como destino en la fecha local (YYYY-MM-DD).
+   * Usado para permitir pedidos el mismo día aunque ya exista venta desde Nueva venta (solicitar aumentos por lo vendido).
+   */
+  async wasCompletadaComoDestinoEnFechaLocal(
+    idMinoristaDestino: string,
+    fechaLocalISO: string
+  ): Promise<boolean> {
+    const { data, error } = await supabase
+      .from('transferencias_saldos')
+      .select('fecha_escaneo')
+      .eq('id_minorista_destino', idMinoristaDestino)
+      .eq('estado', 'completada')
+      .not('fecha_escaneo', 'is', null)
+      .order('fecha_escaneo', { ascending: false })
+      .limit(50);
+
+    if (error) throw new Error(handleSupabaseError(error));
+    if (!data?.length) return false;
+
+    const fechaDeTimestamp = (ts: string) => {
+      const s = String(ts);
+      return s.includes('T') ? s.split('T')[0]! : s.slice(0, 10);
+    };
+
+    return data.some((row) => row.fecha_escaneo && fechaDeTimestamp(String(row.fecha_escaneo)) === fechaLocalISO);
+  },
+
+  /**
+   * True si hay al menos una transferencia completada hoy como destino cuyo pedido
+   * "Completar saldos" aún no fue registrado (para mostrar el botón en Nueva venta).
+   */
+  async tieneTransferCompletadaSinPedidoSaldosOrigen(
+    idMinoristaDestino: string,
+    fechaLocalISO: string
+  ): Promise<boolean> {
+    const { data, error } = await supabase
+      .from('transferencias_saldos')
+      .select('fecha_escaneo, pedido_completar_saldos_origen_aplicado')
+      .eq('id_minorista_destino', idMinoristaDestino)
+      .eq('estado', 'completada')
+      .not('fecha_escaneo', 'is', null)
+      .order('fecha_escaneo', { ascending: false })
+      .limit(50);
+
+    if (error) throw new Error(handleSupabaseError(error));
+    if (!data?.length) return false;
+
+    const fechaDeTimestamp = (ts: string) => {
+      const s = String(ts);
+      return s.includes('T') ? s.split('T')[0]! : s.slice(0, 10);
+    };
+
+    return data.some(
+      (row) =>
+        row.fecha_escaneo &&
+        fechaDeTimestamp(String(row.fecha_escaneo)) === fechaLocalISO &&
+        !(row as { pedido_completar_saldos_origen_aplicado?: boolean }).pedido_completar_saldos_origen_aplicado
+    );
+  },
+
+  /**
+   * Marca la última transferencia del día (misma lógica que la RPC de cantidades) como
+   * "pedido Completar saldos ya creado". Solo el destino autenticado (RPC).
+   */
+  async marcarPedidoCompletarSaldosOrigenAplicado(fechaLocalISO: string): Promise<void> {
+    const { error } = await supabase.rpc('marcar_transferencia_pedido_completar_saldos_origen', {
+      p_fecha: fechaLocalISO,
+    });
+    if (error) throw new Error(handleSupabaseError(error));
+  },
+
   /** Marca como canceladas las transferencias pendientes ligadas a una venta (admin / reapertura edición). */
   async cancelarPendientesPorVentaOrigen(idVentaOrigen: string): Promise<void> {
     const updatedAt = getLocalDateTimeISO();

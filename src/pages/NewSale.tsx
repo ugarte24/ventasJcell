@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -89,6 +89,7 @@ import {
 } from '@/components/ui/popover';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { bucketProductoResumen } from '@/lib/producto-bucket-resumen';
 import { useSidebar } from '@/components/ui/sidebar';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useIsDesktopLarge } from '@/hooks/use-desktop-large';
@@ -127,26 +128,6 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination';
-
-type BucketVentaResumen = 'tarjeta' | 'recarga' | 'chip' | 'otros';
-
-function normalizeResumenStr(s: string): string {
-  return s.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
-}
-
-/** Agrupa ventas del resumen preregistro en Tarjeta / Recarga / Chip (y Otros si no encaja). */
-function bucketPreregistroItem(
-  categoriaNombre: string | undefined,
-  productoNombre: string
-): BucketVentaResumen {
-  const c = normalizeResumenStr(categoriaNombre || '');
-  const p = normalizeResumenStr(productoNombre);
-  if (c.includes('recarga') || p.includes('recarga')) return 'recarga';
-  if (c.includes('chip') || p.includes('chip')) return 'chip';
-  if (c.includes('tarjeta') || c.includes('tarjet')) return 'tarjeta';
-  if (p.includes('tigo') || p.includes('entel') || p.includes('viva')) return 'tarjeta';
-  return 'otros';
-}
 
 function formatFechaISOLocalLegible(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number);
@@ -231,7 +212,18 @@ export default function NewSale() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
+  const [mostrarBannerPedidoTrasQr, setMostrarBannerPedidoTrasQr] = useState(
+    () => Boolean((location.state as { fromQrTransfer?: boolean } | undefined)?.fromQrTransfer)
+  );
+  const qrTransferLocationCleared = useRef(false);
   const fechaHoy = getLocalDateISO();
+
+  useEffect(() => {
+    const st = location.state as { fromQrTransfer?: boolean } | undefined;
+    if (qrTransferLocationCleared.current || !st?.fromQrTransfer) return;
+    qrTransferLocationCleared.current = true;
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.pathname, location.state, navigate]);
   const ocultarSelectorMetodoPago =
     user?.rol === 'minorista' || user?.rol === 'mayorista';
 
@@ -512,6 +504,14 @@ export default function NewSale() {
 
   const minoristaBloqueadoPorJornadaPendienteVista =
     minoristaBloqueadoPorJornadaPendiente && minoristaConsultaEsHoy;
+
+  const { data: mostrarBotonCompletarSaldosOrigen = false } = useQuery({
+    queryKey: ['transferencia-completar-saldos-pendiente', user?.id, fechaHoy],
+    queryFn: () => transferenciasService.tieneTransferCompletadaSinPedidoSaldosOrigen(user!.id, fechaHoy),
+    enabled: Boolean(user?.id && user.rol === 'minorista'),
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+  });
 
   const handleCalendarioMinoristaSelect = useCallback((d: Date | undefined) => {
     if (!d) return;
@@ -945,7 +945,7 @@ export default function NewSale() {
       const catNombre = id_categoria
         ? categories.find((x) => x.id === id_categoria)?.nombre
         : undefined;
-      acc[bucketPreregistroItem(catNombre, nombre)] += subtotal;
+      acc[bucketProductoResumen(catNombre, nombre)] += subtotal;
     };
     lineasResumenVentasRegistradas.forEach((i) => add(i.id_categoria, i.nombre, i.subtotal));
     lineasResumenBorradorPreregistro.forEach((i) => add(i.id_categoria, i.nombre, i.subtotal));
@@ -1574,6 +1574,27 @@ export default function NewSale() {
       <div className={cn("grid gap-4 sm:gap-6", isDesktopLarge && "lg:grid-cols-3")}>
         {/* Products Section */}
         <div className={cn("space-y-3 sm:space-y-4", isDesktopLarge && "lg:col-span-2")}>
+          {user?.rol === 'minorista' && mostrarBannerPedidoTrasQr && (
+            <Alert className="border-primary/30 bg-primary/5">
+              <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <span className="text-sm">
+                  Recibiste saldos por QR. En <strong>Pedidos</strong>, al crear un pedido tocá{' '}
+                  <strong>Completar saldos</strong>: vas a ver lo que se pide{' '}
+                  <strong>(solo tarjeta y chip, sin recargas)</strong> y, si aceptás, se crea el pedido y se cierra el
+                  formulario, según lo vendido por quien te transfirió (fecha de su venta); al entregar el pedido se
+                  registran como <strong>aumento</strong>.
+                </span>
+                <div className="flex flex-wrap gap-2 shrink-0">
+                  <Button type="button" size="sm" onClick={() => navigate('/pedidos?completarSaldos=1')}>
+                    Ir a Pedidos
+                  </Button>
+                  <Button type="button" size="sm" variant="outline" onClick={() => setMostrarBannerPedidoTrasQr(false)}>
+                    Cerrar
+                  </Button>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
           {/* Mostrar tabla de preregistros si es minorista o mayorista */}
           {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
             <Card className="animate-fade-in">
@@ -1805,6 +1826,20 @@ export default function NewSale() {
                   <div className="space-y-4">
                     {((user?.rol === 'mayorista') || (user?.rol === 'minorista' && minoristaConsultaEsHoy)) && (
                       <div className="flex justify-end -mx-1">
+                        <div className="flex flex-wrap gap-2">
+                          {user?.rol === 'minorista' &&
+                            minoristaConsultaEsHoy &&
+                            mostrarBotonCompletarSaldosOrigen && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="gap-2"
+                              onClick={() => navigate('/pedidos?completarSaldos=1')}
+                            >
+                              <Package className="h-4 w-4" />
+                              Completar saldos
+                            </Button>
+                          )}
                         <Button
                           type="button"
                           variant="outline"
@@ -1815,6 +1850,7 @@ export default function NewSale() {
                           <Package className="h-4 w-4" />
                           Pedidos
                         </Button>
+                        </div>
                       </div>
                     )}
                     <div className="rounded-lg border -mx-4 sm:-mx-6 lg:mx-0 overflow-hidden">
