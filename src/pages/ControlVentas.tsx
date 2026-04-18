@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -312,6 +313,9 @@ export default function ControlVentas() {
               Gestiona y monitorea las ventas de mayoristas y minoristas
             </p>
           </div>
+          <Button variant="outline" asChild className="shrink-0">
+            <Link to="/pagos-mayoristas">Pagos pendientes mayoristas</Link>
+          </Button>
         </div>
 
         {/* Stats Cards */}

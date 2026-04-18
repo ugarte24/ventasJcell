@@ -34,22 +34,30 @@ export function DashboardLayout({ children, title }: DashboardLayoutProps) {
             {title && (
               <h1 className="font-display text-base sm:text-lg font-semibold text-foreground truncate flex-1 min-w-0">{title}</h1>
             )}
-            <div className="ml-auto flex items-center gap-2 sm:gap-4 flex-shrink-0">
+            <div className="ml-auto flex flex-col items-end justify-center gap-0.5 flex-shrink-0 min-w-0 text-right leading-tight">
               <span className="text-xs sm:text-sm text-muted-foreground hidden sm:inline whitespace-nowrap">
-                {new Date().toLocaleDateString('es-BO', { 
-                  weekday: 'long', 
-                  year: 'numeric', 
-                  month: 'long', 
-                  day: 'numeric' 
+                {new Date().toLocaleDateString('es-BO', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
                 })}
               </span>
               <span className="text-xs text-muted-foreground sm:hidden whitespace-nowrap">
-                {new Date().toLocaleDateString('es-BO', { 
+                {new Date().toLocaleDateString('es-BO', {
                   day: 'numeric',
                   month: 'short',
-                  year: 'numeric'
+                  year: 'numeric',
                 })}
               </span>
+              {user?.nombre ? (
+                <span
+                  className="text-[11px] sm:text-xs font-medium text-foreground truncate max-w-[40vw] sm:max-w-[240px]"
+                  title={user.nombre}
+                >
+                  {user.nombre}
+                </span>
+              ) : null}
             </div>
           </header>
           <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 lg:p-6 relative min-h-0 w-full">

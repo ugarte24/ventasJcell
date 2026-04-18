@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Home, ShoppingCart, Package, BarChart3, Users, Settings, LogOut, Receipt, FolderTree, UserCircle, Wallet, ArrowLeftRight, DollarSign, Wrench, Calendar, History, Search, ChevronDown, ChevronRight, ClipboardList, Store, LayoutDashboard, User } from 'lucide-react';
+import { Home, ShoppingCart, Package, BarChart3, Users, Settings, LogOut, Receipt, FolderTree, UserCircle, Wallet, ArrowLeftRight, DollarSign, Wrench, Calendar, History, Search, ChevronDown, ChevronRight, ClipboardList, Store, LayoutDashboard, User, Banknote } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/contexts';
 import {
@@ -46,7 +46,7 @@ const menuSections = [
       { title: 'Ventas a Crédito', url: '/creditos', icon: DollarSign, roles: ['admin', 'vendedor'] },
       { title: 'Mis Pedidos', url: '/pedidos', icon: Package, roles: ['minorista', 'mayorista'] },
       { title: 'Ventas del día', url: '/arqueos/minorista', icon: Wallet, roles: ['minorista'] },
-      { title: 'Mis Arqueos', url: '/arqueos/mayorista', icon: Wallet, roles: ['mayorista'] },
+      { title: 'Ventas del día (Mayorista)', url: '/arqueos/mayorista', icon: Wallet, roles: ['mayorista'] },
     ],
   },
   {
@@ -74,6 +74,7 @@ const menuSections = [
       { title: 'Clientes', url: '/clientes', icon: UserCircle, roles: ['admin', 'vendedor'] },
       { title: 'Arqueo de Caja', url: '/arqueo', icon: Wallet, roles: ['admin'] },
       { title: 'Control Mayoristas y Minoristas', url: '/control-ventas', icon: Users, roles: ['admin'] },
+      { title: 'Pagos mayoristas', url: '/pagos-mayoristas', icon: Banknote, roles: ['admin'] },
       { title: 'Reportes', url: '/reportes', icon: BarChart3, roles: ['admin'] },
       { title: 'Usuarios', url: '/usuarios', icon: Users, roles: ['admin'] },
     ],

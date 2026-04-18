@@ -450,7 +450,7 @@ export default function Dashboard() {
                       onClick={() => navigate('/arqueos/mayorista')}
                     >
                       <Wallet className="h-5 w-5" />
-                      Mis Arqueos
+                      Ventas del día (Mayorista)
                     </Button>
                   )}
                   <Button
@@ -524,7 +524,7 @@ export default function Dashboard() {
                 {isMinoristaMayorista && (
                   <CardDescription>
                     Tickets POS recientes (varias fechas). Para el detalle del día: Nueva venta
-                    {user?.rol === 'minorista' ? ' o Ventas del día.' : ' o Mis Arqueos.'}
+                    {user?.rol === 'minorista' ? ' o Ventas del día.' : ' o Ventas del día (Mayorista).'}
                   </CardDescription>
                 )}
               </div>

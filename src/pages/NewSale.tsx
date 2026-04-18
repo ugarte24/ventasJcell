@@ -9,7 +9,7 @@ import { useProducts, useSearchProducts } from '@/hooks/useProducts';
 import { useCreateSale } from '@/hooks/useSales';
 import { useClients, useSearchClients } from '@/hooks/useClients';
 import { useCategories } from '@/hooks/useCategories';
-import { Sale, PreregistroVentaItem, TransferenciaSaldo, SaldoRestanteMayorista } from '@/types';
+import { Sale, PreregistroVentaItem, TransferenciaSaldo } from '@/types';
 import { preregistrosService } from '@/services/preregistros.service';
 import { transferenciasService } from '@/services/transferencias.service';
 import { saldosRestantesMayoristasService } from '@/services/saldos-restantes-mayoristas.service';
@@ -239,10 +239,6 @@ export default function NewSale() {
   const [isLoadingPreregistros, setIsLoadingPreregistros] = useState(false);
   const [editingCantidadRestante, setEditingCantidadRestante] = useState<string | null>(null);
   const [editCantidadRestanteValue, setEditCantidadRestanteValue] = useState<string>('');
-  
-  // Estados para mayoristas: arrastrar saldos restantes
-  const [showArrastrarSaldosDialog, setShowArrastrarSaldosDialog] = useState(false);
-  const [saldosParaArrastrar, setSaldosParaArrastrar] = useState<Array<{ id_producto: string; cantidad_restante: number; nombre: string }>>([]);
   
   // Estados para minoristas: generar QR
   const [showQRDialog, setShowQRDialog] = useState(false);
@@ -1179,28 +1175,6 @@ export default function NewSale() {
         setSaleItemCount(itemsConVenta.length);
         setCreatedSale(newSale);
 
-        // Si es mayorista: crear pago pendiente y preparar saldos para arrastrar
-        if (user.rol === 'mayorista') {
-          // Crear registro de pago pendiente
-          await pagosMayoristasService.create(
-            newSale.id,
-            user.id,
-            preregistroTotal,
-            selectedPayment
-          );
-
-          // Preparar saldos restantes para arrastrar
-          const saldosRestantes = preregistroItems
-            .filter(item => item.cantidadRestante > 0)
-            .map(item => ({
-              id_producto: item.id_producto,
-              cantidad_restante: item.cantidadRestante,
-              nombre: item.nombre,
-            }));
-          
-          setSaldosParaArrastrar(saldosRestantes);
-        }
-
         let transferenciaMinorista: TransferenciaSaldo | null = null;
         if (user.rol === 'minorista') {
           const saldosRestantes = preregistroItems
@@ -1254,6 +1228,62 @@ export default function NewSale() {
           localStorage.removeItem(`preregistro_saldo_${user.id}_${item.id}`);
         }
 
+        if (user.rol === 'mayorista') {
+          let arrastreOk = true;
+          try {
+            for (const item of preregistroItems) {
+              await preregistrosService.applyArrastreCantidadInicialMayorista(
+                item.id,
+                item.cantidadRestante
+              );
+            }
+          } catch (arrastreErr: unknown) {
+            arrastreOk = false;
+            console.error(arrastreErr);
+            toast.error(
+              arrastreErr instanceof Error
+                ? arrastreErr.message
+                : 'No se pudo aplicar el arrastre (nueva cantidad inicial). Revisá permisos o ejecutá migrations/rpc_apply_arrastre_mayorista_preregistro.sql'
+            );
+          }
+          if (arrastreOk) {
+            const saldosHistorial = preregistroItems
+              .filter((item) => item.cantidadRestante > 0)
+              .map((item) => ({
+                id_producto: item.id_producto,
+                cantidad_restante: item.cantidadRestante,
+              }));
+            if (saldosHistorial.length > 0) {
+              try {
+                await saldosRestantesMayoristasService.create(newSale.id, user.id, saldosHistorial);
+              } catch (sErr: unknown) {
+                console.error(sErr);
+                toast.warning(
+                  sErr instanceof Error
+                    ? `Arrastre aplicado; historial de saldos: ${sErr.message}`
+                    : 'Arrastre aplicado, pero no se pudo guardar el historial de saldos restantes.'
+                );
+              }
+            }
+          }
+          try {
+            await pagosMayoristasService.create(
+              newSale.id,
+              user.id,
+              preregistroTotal,
+              selectedPayment
+            );
+          } catch (pagoErr: unknown) {
+            console.error(pagoErr);
+            toast.error(
+              pagoErr instanceof Error
+                ? pagoErr.message
+                : 'No se pudo registrar el pago pendiente para el administrador.'
+            );
+          }
+          void queryClient.invalidateQueries({ queryKey: ['preregistros'] });
+        }
+
         if (user.rol === 'minorista') {
           try {
             await usersService.minoristaSetEdicionPreregistroPermitida(false);
@@ -1270,6 +1300,9 @@ export default function NewSale() {
 
         setPreregistroItems((prev) =>
           prev.map((item) => {
+            if (user.rol === 'mayorista') {
+              return { ...item, cantidad: item.cantidadRestante, subtotal: 0 };
+            }
             const cantidadVendida = item.cantidad + item.aumento - item.cantidadRestante;
             if (cantidadVendida > 0) {
               return { ...item, subtotal: 0 };
@@ -1297,7 +1330,7 @@ export default function NewSale() {
         
         // Mostrar diálogo según el rol
         if (user.rol === 'mayorista') {
-          setShowArrastrarSaldosDialog(true);
+          setShowSuccessDialog(true);
         } else if (user.rol === 'minorista' && transferenciaMinorista) {
           setShowSuccessAfterQrClose(true);
           setShowQRDialog(true);
@@ -1421,7 +1454,6 @@ export default function NewSale() {
   const handleNewSale = () => {
     clearCart();
     setShowSuccessDialog(false);
-    setShowArrastrarSaldosDialog(false);
     setShowQRDialog(false);
     setShowSuccessAfterQrClose(false);
     setShowMinoristaFinalizarAdvertencia(false);
@@ -1439,40 +1471,9 @@ export default function NewSale() {
     setCuotaInicialHabilitada(false);
     setCuotaInicial(0);
     setCuotaInicialInput('');
-    setSaldosParaArrastrar([]);
     setQrCode('');
     setTransferenciaCreada(null);
     toast.success('¡Listo para una nueva venta!');
-  };
-
-  // Función para arrastrar saldos restantes (mayoristas)
-  const handleArrastrarSaldos = async () => {
-    if (!createdSale || !user || user.rol !== 'mayorista') return;
-
-    try {
-      const saldosData = saldosParaArrastrar.map(saldo => ({
-        id_producto: saldo.id_producto,
-        cantidad_restante: saldo.cantidad_restante,
-      }));
-
-      await saldosRestantesMayoristasService.create(
-        createdSale.id,
-        user.id,
-        saldosData
-      );
-
-      toast.success('Saldos restantes arrastrados exitosamente');
-      setShowArrastrarSaldosDialog(false);
-      setShowSuccessDialog(true);
-    } catch (error: any) {
-      toast.error(error.message || 'Error al arrastrar saldos restantes');
-    }
-  };
-
-  // Función para omitir arrastrar saldos (mayoristas)
-  const handleOmitirArrastrarSaldos = () => {
-    setShowArrastrarSaldosDialog(false);
-    setShowSuccessDialog(true);
   };
 
   // Resetear cuota inicial cuando cambia el método de pago
@@ -1626,7 +1627,7 @@ export default function NewSale() {
                       ? minoristaConsultaEsHoy
                         ? 'Ventas del día (Minorista)'
                         : 'Consulta (Minorista)'
-                      : 'Preregistros Mayorista'}
+                      : 'Ventas del día (Mayorista)'}
                   </CardTitle>
                   {(user.rol === 'minorista' ||
                     (user.rol === 'mayorista' && showMobileResumenButton)) && (
@@ -2689,7 +2690,9 @@ export default function NewSale() {
                             ) : (
                               <>
                                 <CheckCircle className="h-5 w-5" />
-                                {user?.rol === 'minorista' ? 'Finalizar venta' : 'Completar Venta'}
+                                {user?.rol === 'minorista' || user?.rol === 'mayorista'
+                                  ? 'Finalizar venta'
+                                  : 'Completar Venta'}
                               </>
                             )}
                           </Button>
@@ -3618,7 +3621,9 @@ export default function NewSale() {
                       ) : (
                         <>
                           <CheckCircle className="h-5 w-5" />
-                          Completar Venta
+                          {user?.rol === 'minorista' || user?.rol === 'mayorista'
+                            ? 'Finalizar venta'
+                            : 'Completar Venta'}
                         </>
                       )}
                     </Button>
@@ -3730,7 +3735,9 @@ export default function NewSale() {
                           ) : (
                             <>
                               <CheckCircle className="h-5 w-5" />
-                              {user?.rol === 'minorista' ? 'Finalizar venta' : 'Completar Venta'}
+                              {user?.rol === 'minorista' || user?.rol === 'mayorista'
+                                ? 'Finalizar venta'
+                                : 'Completar Venta'}
                             </>
                           )}
                         </Button>
@@ -3752,62 +3759,6 @@ export default function NewSale() {
           </SheetContent>
         </Sheet>
       )}
-
-      {/* Dialog para arrastrar saldos restantes (Mayoristas) */}
-      <Dialog open={showArrastrarSaldosDialog} onOpenChange={setShowArrastrarSaldosDialog}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="font-display text-xl">Arrastrar Saldos Restantes</DialogTitle>
-            <DialogDescription>
-              Registra los saldos restantes de productos que quedan después de tu jornada de trabajo.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {saldosParaArrastrar.length === 0 ? (
-              <p className="text-center text-muted-foreground py-4">
-                No hay saldos restantes para arrastrar.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Productos con saldo restante:
-                </p>
-                <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                  {saldosParaArrastrar.map((saldo) => (
-                    <div
-                      key={saldo.id_producto}
-                      className="flex items-center justify-between p-3 border rounded-lg"
-                    >
-                      <div className="flex-1">
-                        <p className="font-medium">{saldo.nombre}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Cantidad restante: {saldo.cantidad_restante}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-          <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button
-              variant="outline"
-              className="w-full sm:w-auto"
-              onClick={handleOmitirArrastrarSaldos}
-            >
-              Omitir
-            </Button>
-            <Button
-              className="w-full sm:w-auto"
-              onClick={handleArrastrarSaldos}
-              disabled={saldosParaArrastrar.length === 0}
-            >
-              Arrastrar Saldos
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Confirmación antes de iniciar nueva venta (minorista) */}
       <AlertDialog
@@ -4032,7 +3983,9 @@ export default function NewSale() {
             <DialogDescription>
           {selectedPayment === 'credito'
             ? 'Venta a crédito creada. Registra pagos desde el módulo de Créditos.'
-            : 'La venta se ha registrado exitosamente en el sistema'}
+            : user?.rol === 'mayorista'
+              ? 'La venta se registró y los saldos quedaron como nueva cantidad inicial. El administrador debe registrar el dinero recibido en Pagos mayoristas (pago pendiente).'
+              : 'La venta se ha registrado exitosamente en el sistema'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">

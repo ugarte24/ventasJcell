@@ -28,6 +28,7 @@ import Pedidos from "./pages/Pedidos";
 import AdminPedidos from "./pages/AdminPedidos";
 import ArqueosMinoristas from "./pages/ArqueosMinoristas";
 import ArqueosMayoristas from "./pages/ArqueosMayoristas";
+import PagosMayoristas from "./pages/PagosMayoristas";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 
@@ -66,7 +67,7 @@ const App = () => (
               <Route path="/preregistros/minorista" element={<PreregistrosMinorista />} />
               <Route path="/preregistros/mayorista" element={<PreregistrosMayorista />} />
               <Route path="/control-ventas" element={<ControlVentas />} />
-              <Route path="/pagos-mayoristas" element={<Navigate to="/control-ventas" replace />} />
+              <Route path="/pagos-mayoristas" element={<PagosMayoristas />} />
               <Route path="/escanear-qr" element={<EscanearQR />} />
               <Route path="/pedidos" element={<Pedidos />} />
               <Route path="/admin/pedidos" element={<AdminPedidos />} />

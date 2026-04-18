@@ -246,6 +246,42 @@ export const preregistrosService = {
     if (error) throw new Error(handleSupabaseError(error));
   },
 
+  /**
+   * Tras finalizar venta mayorista (arrastre): la nueva cantidad inicial y el saldo
+   * quedan iguales al saldo restante. Preferir RPC `apply_arrastre_mayorista_preregistro`
+   * (migrations/rpc_apply_arrastre_mayorista_preregistro.sql); si no existe, UPDATE directo.
+   */
+  async applyArrastreCantidadInicialMayorista(
+    preregistroId: string,
+    nuevaCantidadInicial: number
+  ): Promise<void> {
+    if (!Number.isFinite(nuevaCantidadInicial) || nuevaCantidadInicial < 0) {
+      throw new Error('Cantidad inválida para arrastre');
+    }
+    const { error: rpcError } = await supabase.rpc('apply_arrastre_mayorista_preregistro', {
+      p_preregistro_id: preregistroId,
+      p_nueva_cantidad: Math.floor(nuevaCantidadInicial),
+    });
+    if (!rpcError) return;
+
+    const msg = rpcError.message || '';
+    if (!/function|does not exist|schema cache/i.test(msg)) {
+      throw new Error(handleSupabaseError(rpcError));
+    }
+
+    const updatedAt = getLocalDateTimeISO();
+    const n = Math.floor(nuevaCantidadInicial);
+    const { error } = await supabase
+      .from('preregistros_mayorista')
+      .update({
+        cantidad: n,
+        cantidad_restante: n,
+        updated_at: updatedAt,
+      })
+      .eq('id', preregistroId);
+    if (error) throw new Error(handleSupabaseError(error));
+  },
+
   async updatePreregistroMinorista(
     id: string,
     updates: {

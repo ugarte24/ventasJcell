@@ -221,6 +221,12 @@ export const ventasMayoristasService = {
     });
   },
 
+  /** Movimientos de un día (misma fecha desde/hasta), como minorista en «Ventas del día». */
+  async getVentasDelDia(idMayorista: string, fecha?: string): Promise<VentaMayorista[]> {
+    const fechaBusqueda = fecha || getLocalDateISO();
+    return this.getVentasDelPeriodo(idMayorista, fechaBusqueda, fechaBusqueda);
+  },
+
   /**
    * Obtener aumentos del período para un mayorista
    */

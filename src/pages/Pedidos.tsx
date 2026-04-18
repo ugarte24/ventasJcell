@@ -98,7 +98,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { usuarioControlDiarioService } from '@/services/usuario-control-diario.service';
 import { minoristaJornadaDiariaService } from '@/services/minorista-jornada-diaria.service';
 import { ventasMinoristasService } from '@/services/ventas-minoristas.service';
-import { ventasMayoristasService } from '@/services/ventas-mayoristas.service';
 import { transferenciasService } from '@/services/transferencias.service';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useCategories } from '@/hooks/useCategories';
@@ -265,10 +264,9 @@ export default function Pedidos() {
           }
           if (!jornadaOk) return { puede: false as const, motivo: 'jornada' as const };
         }
-      } else {
-        const hay = await ventasMayoristasService.hasVentaRegistradaDesdeNuevaVentaEnFecha(user.id, fecha);
-        if (hay) return { puede: false as const, motivo: 'venta' as const };
       }
+      // Mayorista: los pedidos siguen disponibles aunque haya finalizado venta desde Nueva venta ese día
+      // (mientras tenga preregistro / flujo de nueva venta; no exigir habilitación por "venta" como al minorista).
       return { puede: true as const };
     },
     enabled: !!user && (user.rol === 'minorista' || user.rol === 'mayorista'),
