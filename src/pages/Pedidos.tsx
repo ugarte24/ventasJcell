@@ -14,6 +14,7 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
+import { ResponsiveTable } from '@/components/ui/responsive-table';
 import {
   Dialog,
   DialogContent,
@@ -646,7 +647,7 @@ export default function Pedidos() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="font-display text-3xl font-bold">Historial de Pedidos</h1>
+            <h1 className="font-display text-2xl sm:text-3xl font-bold">Historial de Pedidos</h1>
             <p className="text-muted-foreground mt-1">
               Visualiza y gestiona todos tus pedidos de productos basados en tus preregistros
             </p>
@@ -692,7 +693,7 @@ export default function Pedidos() {
         )}
 
         {/* Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Pedidos</CardTitle>
@@ -788,7 +789,7 @@ export default function Pedidos() {
               </div>
             ) : (
               <>
-                <div className="rounded-md border">
+                <ResponsiveTable minWidth="lg" className="rounded-md">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -924,7 +925,7 @@ export default function Pedidos() {
                       })}
                     </TableBody>
                   </Table>
-                </div>
+                </ResponsiveTable>
 
                 {/* Pagination */}
                 {totalPages > 1 && (
@@ -1186,7 +1187,7 @@ export default function Pedidos() {
           {selectedPedido && (
             <div className="space-y-6 py-4">
               {/* Información General */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label className="text-muted-foreground">ID del Pedido</Label>
                   <p className="font-mono text-sm font-medium">{selectedPedido.id}</p>
@@ -1257,13 +1258,13 @@ export default function Pedidos() {
                 <div className="border rounded-lg divide-y">
                   {selectedPedido.detalles && selectedPedido.detalles.length > 0 ? (
                     <>
-                      <div className="grid grid-cols-3 gap-4 p-3 bg-muted font-medium text-sm">
+                      <div className="grid grid-cols-[1fr_auto] sm:grid-cols-3 gap-2 sm:gap-4 p-3 bg-muted font-medium text-sm">
                         <div>Producto</div>
                         <div className="text-center">Código</div>
                         <div className="text-right">Cantidad</div>
                       </div>
                       {selectedPedido.detalles.map((detalle) => (
-                        <div key={detalle.id} className="grid grid-cols-3 gap-4 p-3 items-center hover:bg-muted/50 transition-colors">
+                        <div key={detalle.id} className="grid grid-cols-[1fr_auto] sm:grid-cols-3 gap-2 sm:gap-4 p-3 items-center hover:bg-muted/50 transition-colors">
                           <div>
                             <p className="font-medium">{detalle.producto?.nombre || 'N/A'}</p>
                             {detalle.producto?.codigo && (

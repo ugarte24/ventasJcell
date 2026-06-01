@@ -838,7 +838,7 @@ export default function SalesHistory() {
           {selectedSale && (
             <div className="space-y-4 py-4">
               {/* Información de la venta */}
-              <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border p-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Total</p>
                   <p className="font-display text-2xl font-bold">Bs. {selectedSale.total.toFixed(2)}</p>
@@ -876,7 +876,7 @@ export default function SalesHistory() {
                     ))}
                   </div>
                 ) : saleDetails && saleDetails.length > 0 ? (
-                  <div className="rounded-lg border">
+                  <div className="rounded-lg border overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>

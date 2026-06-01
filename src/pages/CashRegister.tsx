@@ -385,7 +385,7 @@ export default function CashRegister() {
                   {loadingByMethod || loadingCreditReceipts || loadingServicesTotal ? (
                     <Skeleton className="h-20 w-full" />
                   ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                       <div className="rounded-lg border p-3 bg-muted/30">
                         <p className="text-xs text-muted-foreground">Efectivo</p>
                         <p className="text-lg font-semibold">Bs. {salesByMethod.efectivo.toFixed(2)}</p>

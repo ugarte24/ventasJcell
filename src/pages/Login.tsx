@@ -58,7 +58,7 @@ export default function Login() {
         </div>
 
         {/* Login Form */}
-        <div className="rounded-2xl border bg-card p-8 shadow-card">
+        <div className="rounded-2xl border bg-card p-5 sm:p-8 shadow-card">
           <div className="mb-6">
             <h2 className="font-display text-xl font-semibold text-foreground">Iniciar Sesión</h2>
             <p className="mt-1 text-sm text-muted-foreground">

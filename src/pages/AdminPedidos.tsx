@@ -13,6 +13,7 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
+import { ResponsiveTable } from '@/components/ui/responsive-table';
 import {
   Dialog,
   DialogContent,
@@ -230,7 +231,7 @@ export default function AdminPedidos() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="font-display text-3xl font-bold">Gestión de Pedidos</h1>
+            <h1 className="font-display text-2xl sm:text-3xl font-bold">Gestión de Pedidos</h1>
             <p className="text-muted-foreground mt-1">
               Gestiona todos los pedidos de minoristas y mayoristas
             </p>
@@ -238,7 +239,7 @@ export default function AdminPedidos() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Pedidos</CardTitle>
@@ -341,7 +342,7 @@ export default function AdminPedidos() {
               </div>
             ) : (
               <>
-                <div className="rounded-md border">
+                <ResponsiveTable minWidth="lg" className="rounded-md">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -436,7 +437,7 @@ export default function AdminPedidos() {
                       ))}
                     </TableBody>
                   </Table>
-                </div>
+                </ResponsiveTable>
 
                 {/* Pagination */}
                 {totalPages > 1 && (
@@ -500,7 +501,7 @@ export default function AdminPedidos() {
           </DialogHeader>
           {selectedPedido && (
             <div className="space-y-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label className="text-muted-foreground">Usuario</Label>
                   <p className="font-medium">{selectedPedido.usuario?.nombre || 'N/A'}</p>

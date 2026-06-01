@@ -442,7 +442,7 @@ export default function EscanearQR() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="font-display text-3xl font-bold">Escanear Código QR</h1>
+            <h1 className="font-display text-2xl sm:text-3xl font-bold">Escanear Código QR</h1>
             <p className="text-muted-foreground mt-1">
               Escanea un código QR para recibir saldos restantes de otro minorista
             </p>

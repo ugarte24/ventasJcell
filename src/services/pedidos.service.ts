@@ -186,13 +186,12 @@ export const pedidosService = {
         }
       } else if (pedido.tipo_usuario === 'mayorista') {
         // Para mayoristas: crear registros en ventas_mayoristas
+        const preregistros = await preregistrosService.getPreregistrosMayorista(pedido.id_usuario);
         for (const detalle of detalles) {
-          // Verificar que existe preregistro (opcional, pero recomendado)
-          const preregistros = await preregistrosService.getPreregistrosMayorista(pedido.id_usuario, fechaEntregaFinal);
-          const preregistroProducto = preregistros.find(p => p.id_producto === detalle.id_producto && p.fecha === fechaEntregaFinal);
-          
+          const preregistroProducto = preregistros.find(p => p.id_producto === detalle.id_producto);
+
           if (!preregistroProducto) {
-            throw new Error(`No existe preregistro para el producto ${detalle.id_producto} en la fecha ${fechaEntregaFinal}. El pedido solo puede incluir productos con preregistro.`);
+            throw new Error(`No existe preregistro para el producto ${detalle.id_producto}. El pedido solo puede incluir productos con preregistro.`);
           }
           
           // Obtener precio del producto

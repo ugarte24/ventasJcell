@@ -111,7 +111,7 @@ export default function ArqueosMinoristas() {
     <DashboardLayout title="Ventas del día">
       <div className="space-y-6">
         <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-bold font-display tracking-tight">Ventas del día</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold font-display tracking-tight">Ventas del día</h1>
           <p className="text-muted-foreground">
             Consultá movimientos por fecha con el calendario. Se registran al finalizar en{' '}
             <strong>Nueva venta</strong> o por aumentos de pedidos.

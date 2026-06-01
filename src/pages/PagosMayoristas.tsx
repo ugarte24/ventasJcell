@@ -13,6 +13,7 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
+import { ResponsiveTable } from '@/components/ui/responsive-table';
 import {
   Dialog,
   DialogContent,
@@ -250,7 +251,7 @@ export default function PagosMayoristas() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="font-display text-3xl font-bold">Pagos de Mayoristas</h1>
+            <h1 className="font-display text-2xl sm:text-3xl font-bold">Pagos de Mayoristas</h1>
             <p className="text-muted-foreground mt-1">
               Verifica y gestiona los pagos recibidos de mayoristas
             </p>
@@ -258,7 +259,7 @@ export default function PagosMayoristas() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Pendientes</CardTitle>
@@ -353,7 +354,7 @@ export default function PagosMayoristas() {
               </div>
             ) : (
               <>
-                <div className="rounded-md border">
+                <ResponsiveTable minWidth="lg" className="rounded-md">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -441,7 +442,7 @@ export default function PagosMayoristas() {
                       ))}
                     </TableBody>
                   </Table>
-                </div>
+                </ResponsiveTable>
 
                 {/* Pagination */}
                 {totalPages > 1 && (

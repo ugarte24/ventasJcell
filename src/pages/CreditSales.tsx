@@ -13,6 +13,7 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
+import { ResponsiveTable } from '@/components/ui/responsive-table';
 import {
   Dialog,
   DialogContent,
@@ -433,7 +434,7 @@ export default function CreditSales() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Buscar</Label>
                 <div className="relative">
@@ -469,7 +470,7 @@ export default function CreditSales() {
         </Card>
 
         {/* Resumen */}
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-3">
           <Card>
             <CardContent className="pt-6">
               <div className="text-sm text-muted-foreground">Total Ventas</div>
@@ -508,7 +509,7 @@ export default function CreditSales() {
               </div>
             ) : (
               <>
-                <div className="rounded-md border">
+                <ResponsiveTable minWidth="xl" className="rounded-md">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -640,7 +641,7 @@ export default function CreditSales() {
                       })}
                     </TableBody>
                   </Table>
-                </div>
+                </ResponsiveTable>
 
                 {/* Paginación */}
                 {totalPages > 1 && (
@@ -748,7 +749,7 @@ export default function CreditSales() {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Fecha de Pago *</Label>
                       <DatePicker
@@ -884,7 +885,7 @@ export default function CreditSales() {
                   <div className="p-4 border-b bg-muted/50">
                     <h3 className="font-semibold">Productos de la Venta</h3>
                   </div>
-                  <div className="p-4">
+                  <div className="p-4 overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -935,7 +936,7 @@ export default function CreditSales() {
                     No hay pagos registrados
                   </div>
                 ) : (
-                  <div className="rounded-md border">
+                  <ResponsiveTable minWidth="md" className="rounded-md">
                     <TooltipProvider>
                       <Table>
                         <TableHeader>
@@ -1047,7 +1048,7 @@ export default function CreditSales() {
                       </TableBody>
                     </Table>
                     </TooltipProvider>
-                  </div>
+                  </ResponsiveTable>
                 );
               })()}
               </div>

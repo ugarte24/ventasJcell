@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { PreregistroManageProductList } from '@/components/preregistros/PreregistroManageProductList';
 import {
   Dialog,
   DialogContent,
@@ -326,7 +327,7 @@ export default function PreregistrosMayorista() {
       <div className="space-y-4">
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle>Preregistros Mayorista</CardTitle>
               <Button onClick={() => setIsDialogOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
@@ -542,34 +543,35 @@ export default function PreregistrosMayorista() {
 
         {/* Dialog para gestionar productos de un mayorista */}
         <Dialog open={isManageDialogOpen} onOpenChange={setIsManageDialogOpen}>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>
+          <DialogContent className="sm:max-w-3xl gap-3 sm:gap-4">
+            <DialogHeader className="text-left space-y-2">
+              <DialogTitle className="text-base sm:text-lg leading-snug break-words pr-6">
                 Gestionar Productos - {mayoristasUnicos.find(m => m.id === selectedMayoristaForManage)?.nombre || 'N/A'}
               </DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="text-pretty">
                 Agrega, edita o elimina productos de este mayorista
-                {fechaGestionLabel ? ` para la fecha ${fechaGestionLabel}` : ''}. Usá las flechas para subir o bajar
-                filas; el mismo orden se usa en Nueva venta.
+                {fechaGestionLabel ? ` para la fecha ${fechaGestionLabel}` : ''}. Usá las flechas para reordenar; el mismo orden se usa en Nueva venta.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-4">
+            <div className="space-y-4 py-2 sm:py-4">
               {/* Formulario para agregar nuevo producto */}
-              <div className="border rounded-lg p-4 space-y-4">
-                <h3 className="font-semibold">Agregar Nuevo Producto</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="md:col-span-2 space-y-2">
+              <div className="border rounded-lg p-3 sm:p-4 space-y-3 sm:space-y-4">
+                <h3 className="font-semibold text-sm sm:text-base">Agregar Nuevo Producto</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 sm:gap-4">
+                  <div className="space-y-2 min-w-0">
                     <Label>Producto *</Label>
                     <Popover open={newProductSearchOpen} onOpenChange={setNewProductSearchOpen}>
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
                           role="combobox"
-                          className="w-full justify-between"
+                          className="w-full justify-between min-w-0"
                         >
+                          <span className="truncate text-left">
                           {newProductForManage
                             ? products.find(p => p.id === newProductForManage)?.nombre || 'Seleccionar producto'
                             : 'Seleccionar producto'}
+                          </span>
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
@@ -613,7 +615,7 @@ export default function PreregistrosMayorista() {
                       </PopoverContent>
                     </Popover>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-2 sm:w-28">
                     <Label htmlFor="newCantidadForManage">Cantidad *</Label>
                     <Input
                       id="newCantidadForManage"
@@ -625,95 +627,22 @@ export default function PreregistrosMayorista() {
                     />
                   </div>
                 </div>
-                <Button onClick={handleAddProductFromManage} className="w-full md:w-auto">
+                <Button onClick={handleAddProductFromManage} className="w-full sm:w-auto">
                   <Plus className="h-4 w-4 mr-2" />
                   Agregar Producto
                 </Button>
               </div>
 
-              {/* Tabla de productos del mayorista */}
-              <div className="border rounded-lg">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Producto</TableHead>
-                      <TableHead>Código</TableHead>
-                      <TableHead className="text-right">Cantidad</TableHead>
-                      <TableHead className="text-right">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {preregistrosDelMayorista.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
-                          No hay productos registrados para este mayorista en esta fecha
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      preregistrosDelMayorista.map((preregistro, rowIndex) => (
-                        <TableRow key={preregistro.id}>
-                          <TableCell>
-                            {preregistro.producto?.nombre || 'N/A'}
-                          </TableCell>
-                          <TableCell>
-                            {preregistro.producto?.codigo || 'N/A'}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {preregistro.cantidad}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-1 flex-wrap sm:flex-nowrap">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                                aria-label="Subir una fila"
-                                disabled={isReordering || rowIndex === 0}
-                                onClick={() => void handleMoveMayoristaPreregistro(rowIndex, 'up')}
-                              >
-                                <ArrowUp className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                                aria-label="Bajar una fila"
-                                disabled={
-                                  isReordering || rowIndex >= preregistrosDelMayorista.length - 1
-                                }
-                                onClick={() => void handleMoveMayoristaPreregistro(rowIndex, 'down')}
-                              >
-                                <ArrowDown className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEditProductFromManage(preregistro)}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDeleteProductFromManage(preregistro.id)}
-                                disabled={isDeleting === preregistro.id}
-                              >
-                                {isDeleting === preregistro.id ? (
-                                  <Loader className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                )}
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+              <PreregistroManageProductList
+                items={preregistrosDelMayorista}
+                emptyMessage="No hay productos registrados para este mayorista"
+                isReordering={isReordering}
+                isDeletingId={isDeleting}
+                onMoveUp={(index) => void handleMoveMayoristaPreregistro(index, 'up')}
+                onMoveDown={(index) => void handleMoveMayoristaPreregistro(index, 'down')}
+                onEdit={handleEditProductFromManage}
+                onDelete={(id) => void handleDeleteProductFromManage(id)}
+              />
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsManageDialogOpen(false)}>
