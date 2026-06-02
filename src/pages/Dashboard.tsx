@@ -22,6 +22,7 @@ import {
   MINORISTA_JORNADA_DIARIA_QUERY_KEY,
 } from '@/services/minorista-jornada-diaria.service';
 import { getLocalDateISO, formatDateOnlyLocal, cn } from '@/lib/utils';
+import { isMayoristaLikeRole, isMayoristaRole, isMinoristaRole, usesPreregistroNuevaVenta, usesPreregistroPanel } from '@/lib/user-roles';
 import { tryAutoFinalizarVentaMinoristaDiaAnterior } from '@/services/minorista-auto-finalizar-dia-anterior.service';
 import { NotificacionesArqueo } from '@/components/NotificacionesArqueo';
 
@@ -29,13 +30,15 @@ export default function Dashboard() {
   const { user, refreshUserProfile } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const isMinoristaMayorista = user?.rol === 'minorista' || user?.rol === 'mayorista';
+  const tieneModulosPedidos = usesPreregistroPanel(user?.rol);
+  const isMinoristaMayorista = usesPreregistroNuevaVenta(user?.rol);
+  const esMinorista = isMinoristaRole(user?.rol);
+  const esMayoristaLike = isMayoristaLikeRole(user?.rol);
   
   // Queries para admin/vendedor
   const { data: salesToday = [], isLoading: loadingSales } = useTodaySales();
   const { data: allSales = [] } = useSales(); // Para mostrar últimas ventas si no hay ventas hoy
   const { data: productosStockBajo = [], isLoading: loadingStock } = useLowStockProducts();
-  // Solo cargar servicios si el usuario no es minorista ni mayorista
   const shouldLoadServicios = !isMinoristaMayorista;
   const { data: servicios = [], isLoading: loadingServicios } = useServicios(false, {
     enabled: shouldLoadServicios,
@@ -48,7 +51,7 @@ export default function Dashboard() {
       if (!user) return [];
       return await pedidosService.getAll(user.id);
     },
-    enabled: !!user && isMinoristaMayorista,
+    enabled: !!user && tieneModulosPedidos,
   });
 
   const { data: preregistros = [], isLoading: loadingPreregistros } = useQuery({
@@ -57,13 +60,12 @@ export default function Dashboard() {
       if (!user) return [];
       if (user.rol === 'minorista') {
         return await preregistrosService.getPreregistrosMinorista(user.id);
-      } else if (user.rol === 'mayorista') {
-        const fecha = getLocalDateISO();
-        return await preregistrosService.getPreregistrosMayorista(user.id, fecha);
+      } else if (isMayoristaLikeRole(user.rol)) {
+        return await preregistrosService.getPreregistrosMayorista(user.id);
       }
       return [];
     },
-    enabled: !!user && isMinoristaMayorista,
+    enabled: !!user && tieneModulosPedidos && user.rol !== 'vendedor',
   });
 
   // Queries de ventas para minoristas/mayoristas
@@ -73,7 +75,7 @@ export default function Dashboard() {
   );
   
   const { data: salesTodayMinoristaMayorista = [] } = useSales(
-    isMinoristaMayorista 
+    isMinoristaMayorista
       ? { id_vendedor: user?.id, fechaDesde: fechaHoy, fechaHasta: fechaHoy }
       : undefined
   );
@@ -99,10 +101,10 @@ export default function Dashboard() {
   const { data: mayoristaHayVentaHoy = false } = useQuery({
     queryKey: ['mayorista-hay-venta-nueva-venta-hoy', user?.id, fechaHoy],
     queryFn: async () => {
-      if (!user || user.rol !== 'mayorista') return false;
+      if (!user || !isMayoristaRole(user.rol)) return false;
       return ventasMayoristasService.hasVentaRegistradaDesdeNuevaVentaEnFecha(user.id, fechaHoy);
     },
-    enabled: !!user && user.rol === 'mayorista',
+    enabled: !!user && isMayoristaRole(user?.rol),
   });
 
   const { data: minoristaJornadaIniciadaHoy = false } = useQuery({
@@ -198,7 +200,7 @@ export default function Dashboard() {
   ]);
 
   const mayoristaEstadoDiaBanner = useMemo(() => {
-    if (user?.rol !== 'mayorista') return null;
+    if (!isMayoristaRole(user?.rol)) return null;
     if (mayoristaHayVentaHoy) {
       return {
         tone: 'success' as const,
@@ -224,7 +226,7 @@ export default function Dashboard() {
         await queryClient.invalidateQueries({ queryKey: ['minorista-hay-venta-nueva-venta-hoy'] });
         await queryClient.invalidateQueries({ queryKey: [MINORISTA_JORNADA_DIARIA_QUERY_KEY] });
       }
-      if (user?.rol === 'mayorista') {
+      if (isMayoristaRole(user?.rol)) {
         await queryClient.invalidateQueries({ queryKey: ['mayorista-hay-venta-nueva-venta-hoy'] });
       }
       toast.success('Datos actualizados');
@@ -423,17 +425,19 @@ export default function Dashboard() {
                 <ShoppingBag className="h-5 w-5" />
                 Nueva Venta
               </Button>
-              {isMinoristaMayorista ? (
+              {tieneModulosPedidos ? (
                 <>
-                  <Button
-                    variant="outline"
-                    className="h-12 justify-start gap-3"
-                    onClick={() => navigate('/ventas')}
-                  >
-                    <Receipt className="h-5 w-5" />
-                    Historial de Ventas
-                  </Button>
-                  {user?.rol === 'minorista' && (
+                  {isMinoristaMayorista && (
+                    <Button
+                      variant="outline"
+                      className="h-12 justify-start gap-3"
+                      onClick={() => navigate('/ventas')}
+                    >
+                      <Receipt className="h-5 w-5" />
+                      Historial de Ventas
+                    </Button>
+                  )}
+                  {esMinorista && (
                     <Button
                       variant="outline"
                       className="h-12 justify-start gap-3"
@@ -443,14 +447,14 @@ export default function Dashboard() {
                       Ventas del día
                     </Button>
                   )}
-                  {user?.rol === 'mayorista' && (
+                  {esMayoristaLike && (
                     <Button
                       variant="outline"
                       className="h-12 justify-start gap-3"
                       onClick={() => navigate('/arqueos/mayorista')}
                     >
                       <Wallet className="h-5 w-5" />
-                      Ventas del día (Mayorista)
+                      Ventas del día
                     </Button>
                   )}
                   <Button
@@ -461,33 +465,34 @@ export default function Dashboard() {
                     <Package className="h-5 w-5" />
                     Mis Pedidos
                   </Button>
-                </>
-              ) : user?.rol === 'vendedor' ? (
-                <>
-                  <Button
-                    variant="outline"
-                    className="h-12 justify-start gap-3"
-                    onClick={() => navigate('/ventas')}
-                  >
-                    <Receipt className="h-5 w-5" />
-                    Historial de Ventas
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="h-12 justify-start gap-3"
-                    onClick={() => navigate('/servicios')}
-                  >
-                    <Wrench className="h-5 w-5" />
-                    Servicios
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="h-12 justify-start gap-3"
-                    onClick={() => navigate('/servicios/registro')}
-                  >
-                    <ClipboardList className="h-5 w-5" />
-                    Registro de servicios
-                  </Button>
+                  {user?.rol === 'vendedor' && (
+                    <>
+                      <Button
+                        variant="outline"
+                        className="h-12 justify-start gap-3"
+                        onClick={() => navigate('/ventas')}
+                      >
+                        <Receipt className="h-5 w-5" />
+                        Historial de Ventas
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-12 justify-start gap-3"
+                        onClick={() => navigate('/servicios')}
+                      >
+                        <Wrench className="h-5 w-5" />
+                        Servicios
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-12 justify-start gap-3"
+                        onClick={() => navigate('/servicios/registro')}
+                      >
+                        <ClipboardList className="h-5 w-5" />
+                        Registro de servicios
+                      </Button>
+                    </>
+                  )}
                 </>
               ) : (
                 user?.rol === 'admin' && (

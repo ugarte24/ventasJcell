@@ -30,6 +30,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { APP_VERSION } from '@/lib/constants';
+import { isMayoristaLikeRole, isMinoristaRole, usesPreregistroPanel } from '@/lib/user-roles';
 
 const menuSections = [
   {
@@ -44,9 +45,9 @@ const menuSections = [
       { title: 'Nueva Venta', url: '/ventas/nueva', icon: ShoppingCart, roles: ['admin', 'vendedor', 'minorista', 'mayorista'] },
       { title: 'Historial de Ventas', url: '/ventas', icon: Receipt, roles: ['admin', 'vendedor', 'minorista', 'mayorista'] },
       { title: 'Ventas a Crédito', url: '/creditos', icon: DollarSign, roles: ['admin', 'vendedor'] },
-      { title: 'Mis Pedidos', url: '/pedidos', icon: Package, roles: ['minorista', 'mayorista'] },
+      { title: 'Mis Pedidos', url: '/pedidos', icon: Package, roles: ['minorista', 'mayorista', 'vendedor'] },
       { title: 'Ventas del día', url: '/arqueos/minorista', icon: Wallet, roles: ['minorista'] },
-      { title: 'Ventas del día (Mayorista)', url: '/arqueos/mayorista', icon: Wallet, roles: ['mayorista'] },
+      { title: 'Ventas del día', url: '/arqueos/mayorista', icon: Wallet, roles: ['mayorista', 'vendedor'] },
     ],
   },
   {
@@ -286,7 +287,7 @@ export function AppSidebar() {
                         {section.items.map((item) => {
                           // Determinar el icono según el rol para Panel de Control
                           let IconComponent = item.icon;
-                          if (item.title === 'Panel de Control' && user && (user.rol === 'minorista' || user.rol === 'mayorista')) {
+                          if (item.title === 'Panel de Control' && user && usesPreregistroPanel(user.rol)) {
                             IconComponent = LayoutDashboard;
                           }
                           

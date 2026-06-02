@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { isMayoristaLikeRole, getRoleDisplayLabel } from '@/lib/user-roles';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -98,7 +99,9 @@ export default function ControlVentas() {
     queryKey: ['usuarios-mayoristas-minoristas'],
     queryFn: async () => {
       const allUsers = await usersService.getAll();
-      return allUsers.filter(u => u.rol === 'mayorista' || u.rol === 'minorista');
+      return allUsers.filter(
+        (u) => u.rol === 'minorista' || isMayoristaLikeRole(u.rol)
+      );
     },
     enabled: user?.rol === 'admin',
   });
@@ -183,7 +186,7 @@ export default function ControlVentas() {
     const totalMonto = filteredSales.reduce((sum, sale) => sum + parseFloat(sale.total || '0'), 0);
     const mayoristasCount = new Set(filteredSales.map(s => s.id_vendedor).filter(id => {
       const u = usuarios.find(us => us.id === id);
-      return u?.rol === 'mayorista';
+      return isMayoristaLikeRole(u?.rol);
     })).size;
     const minoristasCount = new Set(filteredSales.map(s => s.id_vendedor).filter(id => {
       const u = usuarios.find(us => us.id === id);
@@ -483,7 +486,7 @@ export default function ControlVentas() {
                           <TableCell className="font-medium">{u.nombre}</TableCell>
                           <TableCell>
                             <Badge variant="outline" className="capitalize">
-                              {u.rol === 'mayorista' ? 'Mayorista' : 'Minorista'}
+                              {getRoleDisplayLabel(u.rol)}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-center">
@@ -627,9 +630,7 @@ export default function ControlVentas() {
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline" className="capitalize">
-                                {usuario?.rol === 'mayorista' ? 'Mayorista' : 
-                                 usuario?.rol === 'minorista' ? 'Minorista' : 
-                                 usuario?.rol || 'N/A'}
+                                {getRoleDisplayLabel(usuario?.rol)}
                               </Badge>
                             </TableCell>
                             <TableCell>

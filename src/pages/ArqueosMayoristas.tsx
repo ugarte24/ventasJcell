@@ -17,6 +17,7 @@ import { useAuth } from '@/contexts';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ventasMayoristasService } from '@/services/ventas-mayoristas.service';
 import { getLocalDateISO } from '@/lib/utils';
+import { isMayoristaLikeRole } from '@/lib/user-roles';
 import { useQuery } from '@tanstack/react-query';
 import { VentaMayorista } from '@/types';
 import { cn } from '@/lib/utils';
@@ -79,10 +80,10 @@ export default function ArqueosMayoristas() {
   } = useQuery({
     queryKey: ['ventas-mayorista-dia', user?.id, fechaConsultaVentas],
     queryFn: async () => {
-      if (!user || user.rol !== 'mayorista') return [];
+      if (!user || !isMayoristaLikeRole(user.rol)) return [];
       return await ventasMayoristasService.getVentasDelDia(user.id, fechaConsultaVentas);
     },
-    enabled: !!user && user.rol === 'mayorista',
+    enabled: !!user && isMayoristaLikeRole(user?.rol),
   });
 
   const ventasPorFechaOrdenadas = useMemo(() => {
@@ -98,7 +99,7 @@ export default function ArqueosMayoristas() {
     [ventasPorFecha]
   );
 
-  if (!user || user.rol !== 'mayorista') {
+  if (!user || !isMayoristaLikeRole(user.rol)) {
     return (
       <DashboardLayout title="Ventas del día (Mayorista)">
         <div className="flex items-center justify-center h-96">

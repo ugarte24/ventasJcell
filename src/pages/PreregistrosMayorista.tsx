@@ -41,6 +41,7 @@ import { preregistrosService } from '@/services/preregistros.service';
 import { PreregistroMayorista } from '@/types';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { isMayoristaLikeRole } from '@/lib/user-roles';
 export default function PreregistrosMayorista() {
   const { data: products = [] } = useProducts();
   const { data: users = [] } = useUsers();
@@ -68,7 +69,9 @@ export default function PreregistrosMayorista() {
   const [newProductSearchTerm, setNewProductSearchTerm] = useState('');
   const [isReordering, setIsReordering] = useState(false);
 
-  const mayoristas = users.filter(u => u.rol === 'mayorista' && u.estado === 'activo');
+  const mayoristas = users.filter(
+    (u) => isMayoristaLikeRole(u.rol) && u.estado === 'activo'
+  );
   const filteredMayoristas = mayoristas.filter(m =>
     m.nombre.toLowerCase().includes(mayoristaSearchTerm.toLowerCase()) ||
     m.usuario.toLowerCase().includes(mayoristaSearchTerm.toLowerCase())

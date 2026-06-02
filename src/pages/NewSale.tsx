@@ -28,6 +28,14 @@ import {
   parseDateOnlyLocal,
 } from '@/lib/utils';
 import {
+  type ModoVentaVendedor,
+  canToggleModoVentaVendedor,
+  enModoPreregistroNuevaVenta,
+  isMinoristaRole,
+  usaFlujoMayoristaPreregistro,
+} from '@/lib/user-roles';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
   generarArchivoPngQrTransferencia,
   descargarArchivo,
 } from '@/lib/qr-transferencia-share';
@@ -217,6 +225,12 @@ export default function NewSale() {
   );
   const qrTransferLocationCleared = useRef(false);
   const fechaHoy = getLocalDateISO();
+  const [modoVentaVendedor, setModoVentaVendedor] = useState<ModoVentaVendedor>('preregistro');
+  const esVendedorTienda = canToggleModoVentaVendedor(user?.rol);
+  const enModoPreregistro = enModoPreregistroNuevaVenta(user?.rol, modoVentaVendedor);
+  const flujoMayoristaPreregistro = usaFlujoMayoristaPreregistro(user?.rol, modoVentaVendedor);
+  const esMinorista = isMinoristaRole(user?.rol);
+  const esMayorista = flujoMayoristaPreregistro;
 
   useEffect(() => {
     const st = location.state as { fromQrTransfer?: boolean } | undefined;
@@ -224,8 +238,7 @@ export default function NewSale() {
     qrTransferLocationCleared.current = true;
     navigate(location.pathname, { replace: true, state: {} });
   }, [location.pathname, location.state, navigate]);
-  const ocultarSelectorMetodoPago =
-    user?.rol === 'minorista' || user?.rol === 'mayorista';
+  const ocultarSelectorMetodoPago = enModoPreregistro;
 
   const { data: allProducts = [], isLoading: loadingProducts } = useProducts();
   const { data: searchResults = [], isLoading: searching } = useSearchProducts(searchTerm);
@@ -289,20 +302,20 @@ export default function NewSale() {
     data: ventasRegistradasResumenRaw = [],
     isPending: cargandoVentasResumenDia,
   } = useQuery({
-    queryKey: ['preregistro-resumen-ventas-dia', user?.id, user?.rol, fechaResumenVentasDia],
+    queryKey: ['preregistro-resumen-ventas-dia', user?.id, user?.rol, fechaResumenVentasDia, modoVentaVendedor],
     queryFn: async () => {
       if (!user?.id) return [];
       if (user.rol === 'minorista') {
         const v = await ventasMinoristasService.getVentasDelDia(user.id, fechaVistaMinorista);
         return v.filter((row) => row.cantidad_vendida > 0);
       }
-      if (user.rol === 'mayorista') {
+      if (flujoMayoristaPreregistro) {
         const v = await ventasMayoristasService.getVentasDelPeriodo(user.id, fechaHoy, fechaHoy);
         return v.filter((row) => row.cantidad_vendida > 0);
       }
       return [];
     },
-    enabled: !!user?.id && (user.rol === 'minorista' || user.rol === 'mayorista'),
+    enabled: !!user?.id && enModoPreregistro,
   });
 
   const { data: transferenciaQRConsultaHistorica = null, isFetching: cargandoTransferenciaQRConsultaHistorica } =
@@ -590,10 +603,11 @@ export default function NewSale() {
     };
   }, [user?.id, user?.rol, minoristaEdicionBloqueada, qrCode]);
 
-  // Cargar preregistros si es minorista o mayorista
+  // Cargar preregistros si es minorista, mayorista o vendedor en modo preregistro
   useEffect(() => {
     const loadPreregistros = async () => {
-      if (!user || (user.rol !== 'minorista' && user.rol !== 'mayorista')) {
+      if (!user || !enModoPreregistroNuevaVenta(user.rol, modoVentaVendedor)) {
+        setPreregistroItems([]);
         return;
       }
 
@@ -688,7 +702,7 @@ export default function NewSale() {
             item.subtotal = (item.cantidad + item.aumento - item.cantidadRestante) * item.precio_unitario;
           });
           setPreregistroItems(items);
-        } else if (user.rol === 'mayorista') {
+        } else if (flujoMayoristaPreregistro) {
           // Cargar preregistros del mayorista (sin filtrar por fecha, son reutilizables como minorista)
           const preregistros = await preregistrosService.getPreregistrosMayorista(user.id);
           
@@ -767,7 +781,7 @@ export default function NewSale() {
     };
 
     loadPreregistros();
-  }, [user, location.pathname, fechaVistaMinorista, queryClient, refreshUserProfile]);
+  }, [user, location.pathname, fechaVistaMinorista, queryClient, refreshUserProfile, modoVentaVendedor, enModoPreregistro, flujoMayoristaPreregistro]);
 
   const handleIniciarJornadaMinorista = useCallback(async () => {
     if (!user || user.rol !== 'minorista') return;
@@ -844,7 +858,7 @@ export default function NewSale() {
     try {
       if (user.rol === 'minorista') {
         await preregistrosService.updateCantidadRestanteMinorista(itemId, cantidadRestante);
-      } else if (user.rol === 'mayorista') {
+      } else if (flujoMayoristaPreregistro) {
         await preregistrosService.updateCantidadRestanteMayorista(itemId, cantidadRestante);
       } else {
         return;
@@ -920,7 +934,7 @@ export default function NewSale() {
 
   /** Filas con venta en curso no guardada todavía (evita duplicar lo ya finalizado en BD). */
   const lineasResumenBorradorPreregistro = useMemo(() => {
-    if (user?.rol !== 'minorista' && user?.rol !== 'mayorista') return [];
+    if (!enModoPreregistro) return [];
     // Consulta de otro día (minorista): el preregistro se arma solo para lectura y repetiría lo ya guardado en BD.
     if (user?.rol === 'minorista' && !minoristaConsultaEsHoy) return [];
     const registradasPorProducto = new Map<string, number>();
@@ -1008,7 +1022,7 @@ export default function NewSale() {
     }
 
     // Si es minorista o mayorista, usar preregistros
-    if (user.rol === 'minorista' || user.rol === 'mayorista') {
+    if (enModoPreregistro) {
       if (user.rol === 'minorista' && fechaVistaMinorista !== getLocalDateISO()) {
         toast.error('Solo podés finalizar la venta en la fecha de hoy. Volvé al día actual en el calendario.');
         return;
@@ -1129,7 +1143,7 @@ export default function NewSale() {
           void queryClient.invalidateQueries({ queryKey: ['preregistro-resumen-ventas-dia'] });
           void queryClient.invalidateQueries({ queryKey: ['minorista-hay-venta-nueva-venta-hoy'] });
           void queryClient.invalidateQueries({ queryKey: ['minorista-transfer-qr-consulta-dia'] });
-        } else if (user.rol === 'mayorista') {
+        } else if (flujoMayoristaPreregistro) {
           // Crear registros en ventas_mayoristas para cada producto vendido
           try {
             for (const item of itemsConVenta) {
@@ -1228,7 +1242,7 @@ export default function NewSale() {
           localStorage.removeItem(`preregistro_saldo_${user.id}_${item.id}`);
         }
 
-        if (user.rol === 'mayorista') {
+        if (flujoMayoristaPreregistro) {
           let arrastreOk = true;
           try {
             for (const item of preregistroItems) {
@@ -1300,7 +1314,7 @@ export default function NewSale() {
 
         setPreregistroItems((prev) =>
           prev.map((item) => {
-            if (user.rol === 'mayorista') {
+            if (flujoMayoristaPreregistro) {
               return { ...item, cantidad: item.cantidadRestante, subtotal: 0 };
             }
             const cantidadVendida = item.cantidad + item.aumento - item.cantidadRestante;
@@ -1329,7 +1343,7 @@ export default function NewSale() {
         setSelectedPayment('efectivo');
         
         // Mostrar diálogo según el rol
-        if (user.rol === 'mayorista') {
+        if (flujoMayoristaPreregistro) {
           setShowSuccessDialog(true);
         } else if (user.rol === 'minorista' && transferenciaMinorista) {
           setShowSuccessAfterQrClose(true);
@@ -1560,7 +1574,7 @@ export default function NewSale() {
   }, [clientSearchTerm, clientSearchResults, allClients]);
 
   useEffect(() => {
-    if (user?.rol === 'minorista' || user?.rol === 'mayorista') {
+    if (enModoPreregistro) {
       setSelectedPayment('efectivo');
     }
   }, [user?.rol]);
@@ -1584,10 +1598,32 @@ export default function NewSale() {
       !cargandoVentasResumenDia &&
       lineasResumenVentasRegistradas.length === 0
     );
-  const esMinoristaOMayorista = user?.rol === 'minorista' || user?.rol === 'mayorista';
+  const esMinoristaOMayorista = enModoPreregistro;
 
   return (
     <DashboardLayout title="Nueva Venta">
+      {esVendedorTienda && (
+        <Tabs
+          value={modoVentaVendedor}
+          onValueChange={(value) => {
+            setModoVentaVendedor(value as ModoVentaVendedor);
+            setShowCartSheet(false);
+          }}
+          className="mb-4 sm:mb-6"
+        >
+          <TabsList className="grid h-auto w-full max-w-lg grid-cols-2 p-1">
+            <TabsTrigger value="preregistro" className="gap-2 py-2.5">
+              <ClipboardList className="h-4 w-4 shrink-0" />
+              Venta por preregistro
+            </TabsTrigger>
+            <TabsTrigger value="pos" className="gap-2 py-2.5">
+              <ShoppingCart className="h-4 w-4 shrink-0" />
+              Venta tienda
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      )}
+
       {/* Carrito flotante solo vendedor/admin: esquina inferior izquierda para no tapar tablas a la derecha */}
       {showMobileResumenButton && !esMinoristaOMayorista && (
         <VendedorMobileCartFab itemCount={itemCount} onOpen={() => setShowCartSheet(true)} />
@@ -1618,7 +1654,7 @@ export default function NewSale() {
             </Alert>
           )}
           {/* Mostrar tabla de preregistros si es minorista o mayorista */}
-          {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
+          {enModoPreregistro ? (
             <Card className="animate-fade-in">
               <CardHeader className="space-y-3">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1627,10 +1663,12 @@ export default function NewSale() {
                       ? minoristaConsultaEsHoy
                         ? 'Ventas del día (Minorista)'
                         : 'Consulta (Minorista)'
-                      : 'Ventas del día (Mayorista)'}
+                      : esVendedorTienda
+                        ? 'Venta por preregistro'
+                        : 'Ventas del día (Mayorista)'}
                   </CardTitle>
                   {(user.rol === 'minorista' ||
-                    (user.rol === 'mayorista' && showMobileResumenButton)) && (
+                    (flujoMayoristaPreregistro && showMobileResumenButton)) && (
                     <div className="flex flex-wrap items-center gap-2 shrink-0">
                       {user.rol === 'minorista' && (
                         <Popover open={calendarioMinoristaOpen} onOpenChange={setCalendarioMinoristaOpen}>
@@ -1846,7 +1884,7 @@ export default function NewSale() {
                   )
                 ) : (
                   <div className="space-y-4">
-                    {((user?.rol === 'mayorista') || (user?.rol === 'minorista' && minoristaConsultaEsHoy)) && (
+                    {((esMayorista) || (user?.rol === 'minorista' && minoristaConsultaEsHoy)) && (
                       <div className="flex justify-end -mx-1">
                         <div className="flex flex-wrap gap-2">
                           {user?.rol === 'minorista' &&
@@ -2260,14 +2298,14 @@ export default function NewSale() {
           <Card>
             <CardHeader className="border-b">
               <CardTitle className="flex items-center gap-2 font-display">
-                {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
+                {enModoPreregistro ? (
                   <ClipboardList className="h-5 w-5" />
                 ) : (
                   <ShoppingCart className="h-5 w-5" />
                 )}
-                {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? 'Resumen de Venta' : 'Carrito'}
+                {enModoPreregistro ? 'Resumen de Venta' : 'Carrito'}
               </CardTitle>
-              {(user?.rol === 'minorista' || user?.rol === 'mayorista') && (
+              {enModoPreregistro && (
                 <p className="text-sm text-muted-foreground mt-1.5">
                   {formatFechaISOLocalLegible(
                     user?.rol === 'minorista' ? fechaVistaMinorista : getLocalDateISO()
@@ -2277,7 +2315,7 @@ export default function NewSale() {
             </CardHeader>
             <CardContent className="p-0">
               {/* Mostrar preregistros si es minorista o mayorista */}
-              {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
+              {enModoPreregistro ? (
                 preregistroItems.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-center">
                     <ShoppingCart className="h-12 w-12 text-muted-foreground/50" />
@@ -2375,7 +2413,7 @@ export default function NewSale() {
                       <div className="flex flex-col items-center justify-center py-12 text-center px-4">
                         <ClipboardList className="h-12 w-12 text-muted-foreground/50" />
                         <p className="mt-4 text-muted-foreground">No hay ventas ni saldos vendidos para esta fecha</p>
-                        {(user?.rol === 'minorista' || user?.rol === 'mayorista') && (
+                        {enModoPreregistro && (
                           <p className="mt-2 text-sm text-muted-foreground max-w-sm">
                             Las ventas finalizadas aparecen al cerrar el día en Nueva venta. Si editaste saldos en la
                             tabla, verás aquí la venta en curso cuando el subtotal sea mayor a cero.
@@ -2690,7 +2728,7 @@ export default function NewSale() {
                             ) : (
                               <>
                                 <CheckCircle className="h-5 w-5" />
-                                {user?.rol === 'minorista' || user?.rol === 'mayorista'
+                                {user?.rol === 'minorista' || esMayorista
                                   ? 'Finalizar venta'
                                   : 'Completar Venta'}
                               </>
@@ -2706,7 +2744,7 @@ export default function NewSale() {
                 )
               ) : items.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
-                  {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
+                  {enModoPreregistro ? (
                     <>
                       <ClipboardList className="h-16 w-16 text-muted-foreground/50" />
                       <p className="mt-4 text-muted-foreground">No hay productos en tu resumen</p>
@@ -3002,7 +3040,7 @@ export default function NewSale() {
                               type="number"
                               step="0.01"
                               min="0"
-                              max={(user?.rol === 'minorista' || user?.rol === 'mayorista') ? preregistroTotal : total}
+                              max={enModoPreregistro ? preregistroTotal : total}
                               value={cuotaInicialInput !== '' ? cuotaInicialInput : (cuotaInicial > 0 ? cuotaInicial.toFixed(2) : '')}
                               onChange={(e) => {
                                 const inputValue = e.target.value;
@@ -3013,7 +3051,7 @@ export default function NewSale() {
                                   return;
                                 }
                                 
-                                const currentTotal = (user?.rol === 'minorista' || user?.rol === 'mayorista') ? preregistroTotal : total;
+                                const currentTotal = enModoPreregistro ? preregistroTotal : total;
                                 const numValue = parseFloat(inputValue);
                                 if (!isNaN(numValue) && numValue >= 0 && numValue <= currentTotal) {
                                   setCuotaInicial(numValue);
@@ -3021,7 +3059,7 @@ export default function NewSale() {
                               }}
                               onBlur={(e) => {
                                 const numValue = parseFloat(e.target.value);
-                                const currentTotal = (user?.rol === 'minorista' || user?.rol === 'mayorista') ? preregistroTotal : total;
+                                const currentTotal = enModoPreregistro ? preregistroTotal : total;
                                 if (isNaN(numValue) || numValue < 0) {
                                   setCuotaInicial(0);
                                   setCuotaInicialInput('');
@@ -3101,14 +3139,14 @@ export default function NewSale() {
           <SheetContent side="bottom" className="h-[90vh] flex flex-col p-0">
             <SheetHeader className="px-4 pt-4 pb-2 border-b pr-12">
               <SheetTitle className="flex items-center gap-2 font-display">
-                {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
+                {enModoPreregistro ? (
                   <ClipboardList className="h-5 w-5" />
                 ) : (
                   <ShoppingCart className="h-5 w-5" />
                 )}
-                <span>{(user?.rol === 'minorista' || user?.rol === 'mayorista') ? 'Resumen' : 'Carrito'}</span>
+                <span>{enModoPreregistro ? 'Resumen' : 'Carrito'}</span>
               </SheetTitle>
-              {(user?.rol === 'minorista' || user?.rol === 'mayorista') && (
+              {enModoPreregistro && (
                 <p className="text-sm text-muted-foreground font-normal mt-1">
                   {formatFechaISOLocalLegible(
                     user?.rol === 'minorista' ? fechaVistaMinorista : getLocalDateISO()
@@ -3116,7 +3154,7 @@ export default function NewSale() {
                 </p>
               )}
               <SheetDescription className="sr-only">
-                {(user?.rol === 'minorista' || user?.rol === 'mayorista') 
+                {enModoPreregistro 
                   ? 'Gestiona tu resumen de pedido' 
                   : 'Gestiona los productos en tu carrito de venta'}
               </SheetDescription>
@@ -3125,11 +3163,11 @@ export default function NewSale() {
               <div
                 className={cn(
                   'min-h-0 flex-1 overflow-y-auto',
-                  (user?.rol === 'minorista' || user?.rol === 'mayorista') && 'pb-28'
+                  enModoPreregistro && 'pb-28'
                 )}
               >
               {/* Mostrar preregistros si es minorista o mayorista */}
-              {(user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
+              {enModoPreregistro ? (
                 preregistroItems.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-center px-4">
                     <ClipboardList className="h-16 w-16 text-muted-foreground/50" />
@@ -3228,7 +3266,7 @@ export default function NewSale() {
                       <div className="flex flex-col items-center justify-center py-12 text-center px-4">
                         <ClipboardList className="h-16 w-16 text-muted-foreground/50" />
                         <p className="mt-4 text-muted-foreground">No hay ventas ni saldos vendidos para esta fecha</p>
-                        {(user?.rol === 'minorista' || user?.rol === 'mayorista') && (
+                        {enModoPreregistro && (
                           <p className="mt-2 text-sm text-muted-foreground max-w-sm">
                             Las ventas finalizadas aparecen al cerrar el día en Nueva venta. Si editaste saldos en la
                             tabla, verás aquí la venta en curso cuando el subtotal sea mayor a cero.
@@ -3553,13 +3591,13 @@ export default function NewSale() {
                   )}
 
                   {/* Total */}
-                  {(user?.rol === 'minorista' || user?.rol === 'mayorista') &&
+                  {enModoPreregistro &&
                   cargandoVentasResumenDia ? (
                     <div className="border-t bg-muted/30 p-4 flex flex-col items-center gap-2 py-6">
                       <Loader className="h-8 w-8 animate-spin text-muted-foreground" />
                       <span className="text-sm text-muted-foreground">Cargando ventas…</span>
                     </div>
-                  ) : (user?.rol === 'minorista' || user?.rol === 'mayorista') &&
+                  ) : enModoPreregistro &&
                   hayLineasEnResumenMinorMayor ? (
                     <>
                       <div className="border-t p-4 space-y-2">
@@ -3584,7 +3622,7 @@ export default function NewSale() {
                         </div>
                       </div>
                     </>
-                  ) : (user?.rol === 'minorista' || user?.rol === 'mayorista') ? (
+                  ) : enModoPreregistro ? (
                     <div className="border-t bg-muted/30 p-4 text-center text-sm text-muted-foreground">
                       No hay ventas ni saldos vendidos para esta fecha
                     </div>
@@ -3611,7 +3649,7 @@ export default function NewSale() {
                         handleCompleteSale();
                         setShowCartSheet(false);
                       }}
-                      disabled={((user?.rol === 'minorista' || user?.rol === 'mayorista') ? preregistroItems.length === 0 : itemCount === 0) || createSaleMutation.isPending}
+                      disabled={(enModoPreregistro ? preregistroItems.length === 0 : itemCount === 0) || createSaleMutation.isPending}
                     >
                       {createSaleMutation.isPending ? (
                         <>
@@ -3621,7 +3659,7 @@ export default function NewSale() {
                       ) : (
                         <>
                           <CheckCircle className="h-5 w-5" />
-                          {user?.rol === 'minorista' || user?.rol === 'mayorista'
+                          {user?.rol === 'minorista' || esMayorista
                             ? 'Finalizar venta'
                             : 'Completar Venta'}
                         </>
@@ -3641,7 +3679,7 @@ export default function NewSale() {
                 </>
               )}
               </div>
-              {(user?.rol === 'minorista' || user?.rol === 'mayorista') &&
+              {enModoPreregistro &&
                 preregistroItems.length > 0 && (
                   <div className="shrink-0 space-y-2 border-t bg-background p-4">
                     {user?.rol === 'minorista' && minoristaEdicionBloqueada && minoristaConsultaEsHoy ? (
@@ -3735,7 +3773,7 @@ export default function NewSale() {
                           ) : (
                             <>
                               <CheckCircle className="h-5 w-5" />
-                              {user?.rol === 'minorista' || user?.rol === 'mayorista'
+                              {user?.rol === 'minorista' || esMayorista
                                 ? 'Finalizar venta'
                                 : 'Completar Venta'}
                             </>
@@ -3983,7 +4021,7 @@ export default function NewSale() {
             <DialogDescription>
           {selectedPayment === 'credito'
             ? 'Venta a crédito creada. Registra pagos desde el módulo de Créditos.'
-            : user?.rol === 'mayorista'
+            : esMayorista
               ? 'La venta se registró y los saldos quedaron como nueva cantidad inicial. El administrador debe registrar el dinero recibido en Pagos mayoristas (pago pendiente).'
               : 'La venta se ha registrado exitosamente en el sistema'}
             </DialogDescription>

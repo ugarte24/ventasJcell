@@ -95,6 +95,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn, getLocalDateISO } from '@/lib/utils';
+import {
+  getPedidoTipoUsuario,
+  isMayoristaLikeRole,
+  isMinoristaRole,
+  usesPreregistroPanel,
+} from '@/lib/user-roles';
 import { Textarea } from '@/components/ui/textarea';
 import { usuarioControlDiarioService } from '@/services/usuario-control-diario.service';
 import { minoristaJornadaDiariaService } from '@/services/minorista-jornada-diaria.service';
@@ -153,13 +159,12 @@ export default function Pedidos() {
       if (!user) return [];
       if (user.rol === 'minorista') {
         return await preregistrosService.getPreregistrosMinorista(user.id);
-      } else if (user.rol === 'mayorista') {
-        const fecha = getLocalDateISO();
-        return await preregistrosService.getPreregistrosMayorista(user.id, fecha);
+      } else if (isMayoristaLikeRole(user.rol)) {
+        return await preregistrosService.getPreregistrosMayorista(user.id);
       }
       return [];
     },
-    enabled: !!user && (user.rol === 'minorista' || user.rol === 'mayorista'),
+    enabled: !!user && usesPreregistroPanel(user?.rol),
   });
 
   // Obtener productos de preregistros (solo productos que tienen preregistro)
@@ -193,7 +198,7 @@ export default function Pedidos() {
       const estado = estadoFilter === 'todos' ? undefined : estadoFilter;
       return await pedidosService.getAll(user.id);
     },
-    enabled: !!user && (user?.rol === 'minorista' || user?.rol === 'mayorista'),
+    enabled: !!user && usesPreregistroPanel(user?.rol),
   });
 
   // Filtrar por estado
@@ -233,7 +238,7 @@ export default function Pedidos() {
   const { data: pedidosGate } = useQuery({
     queryKey: ['pedidos-gate', user?.id, user?.rol, fechaHoy],
     queryFn: async () => {
-      if (!user || (user.rol !== 'minorista' && user.rol !== 'mayorista')) {
+      if (!user || !usesPreregistroPanel(user.rol)) {
         return { puede: true as const };
       }
       const fecha = fechaHoy;
@@ -270,7 +275,7 @@ export default function Pedidos() {
       // (mientras tenga preregistro / flujo de nueva venta; no exigir habilitación por "venta" como al minorista).
       return { puede: true as const };
     },
-    enabled: !!user && (user.rol === 'minorista' || user.rol === 'mayorista'),
+    enabled: !!user && usesPreregistroPanel(user?.rol),
   });
 
   const puedeCrearPedido = pedidosGate?.puede !== false;
@@ -293,9 +298,12 @@ export default function Pedidos() {
         obs = observaciones.trim() || undefined;
       }
 
+      const tipoPedido = getPedidoTipoUsuario(user.rol);
+      if (!tipoPedido) throw new Error('Tu rol no puede crear pedidos');
+
       const pedido = await pedidosService.create(
         user.id,
-        user.rol as 'minorista' | 'mayorista',
+        tipoPedido,
         detalles.map((d) => ({ id_producto: d.id_producto, cantidad: d.cantidad })),
         obs
       );
@@ -631,7 +639,7 @@ export default function Pedidos() {
   };
 
   // Verificación de permisos: si no hay usuario o no es minorista/mayorista, mostrar mensaje
-  if (!user || (user.rol !== 'minorista' && user.rol !== 'mayorista')) {
+  if (!user || !usesPreregistroPanel(user.rol)) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-96">
