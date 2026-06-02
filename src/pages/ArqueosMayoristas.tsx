@@ -101,7 +101,7 @@ export default function ArqueosMayoristas() {
 
   if (!user || !isMayoristaLikeRole(user.rol)) {
     return (
-      <DashboardLayout title="Ventas del día (Mayorista)">
+      <DashboardLayout title="Ventas del día">
         <div className="flex items-center justify-center h-96">
           <p className="text-muted-foreground">Solo mayoristas pueden acceder a esta página</p>
         </div>
@@ -110,10 +110,10 @@ export default function ArqueosMayoristas() {
   }
 
   return (
-    <DashboardLayout title="Ventas del día (Mayorista)">
+    <DashboardLayout title="Ventas del día">
       <div className="space-y-6">
         <div className="flex flex-col gap-2">
-          <h1 className="text-2xl sm:text-3xl font-bold font-display tracking-tight">Ventas del día (Mayorista)</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold font-display tracking-tight">Ventas del día</h1>
           <p className="text-muted-foreground">
             Consultá movimientos por día con el calendario: ventas desde <strong>Nueva venta</strong> y aumentos por
             pedidos entregados.

@@ -528,8 +528,7 @@ export default function Dashboard() {
                 </CardTitle>
                 {isMinoristaMayorista && (
                   <CardDescription>
-                    Tickets POS recientes (varias fechas). Para el detalle del día: Nueva venta
-                    {user?.rol === 'minorista' ? ' o Ventas del día.' : ' o Ventas del día (Mayorista).'}
+                    Tickets POS recientes (varias fechas). Para el detalle del día: Nueva venta o Ventas del día.
                   </CardDescription>
                 )}
               </div>

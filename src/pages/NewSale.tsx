@@ -1665,7 +1665,7 @@ export default function NewSale() {
                         : 'Consulta (Minorista)'
                       : esVendedorTienda
                         ? 'Venta por preregistro'
-                        : 'Ventas del día (Mayorista)'}
+                        : 'Ventas del día'}
                   </CardTitle>
                   {(user.rol === 'minorista' ||
                     (flujoMayoristaPreregistro && showMobileResumenButton)) && (
